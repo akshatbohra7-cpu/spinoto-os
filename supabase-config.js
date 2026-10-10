@@ -1,8 +1,5 @@
-// Paste your own Supabase project's values below.
-// Find them in Supabase → Project Settings → API.
-// This file is safe to commit — the anon key is meant to be public,
-// access is controlled by the Row Level Security policy you set up (see schema.sql).
+// Supabase project values. The anon key is public by design; access is controlled by RLS (see schema.sql).
 window.SPINOTO_CONFIG = {
-  SUPABASE_URL: "PASTE_YOUR_SUPABASE_PROJECT_URL_HERE",
-  SUPABASE_ANON_KEY: "PASTE_YOUR_SUPABASE_ANON_PUBLIC_KEY_HERE"
+  SUPABASE_URL: "https://ogqcqsgppxjbtrscyhgr.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ncWNxc2dwcHhqYnRyc2N5aGdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE2MjAwOTEsImV4cCI6MjEwNzE5NjA5MX0.x1GcQkXYCC_xwlVrOseQt46krfmTkxrl1568nm1DP5c"
 };
