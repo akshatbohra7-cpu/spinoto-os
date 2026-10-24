@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>Spinoto OS</title>
+<html lang="en" data-theme="light"><head><meta charset="utf-8"><title>Spinoto OS</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('sptheme')||'light'}catch(e){}</script>
 <style>
 :root{--bg:#f1f2f7;--s1:#fff;--s2:#f4f5fa;--bd:rgba(20,22,30,.08);--tx:#12141a;--mu:#6a7286;--ac:#ff5a1f;--ac2:#ff2d78;--ok:#0f9d72;--bad:#e5384f;--warn:#c98a0b;--in:#3b6cf0;--gl:rgba(255,255,255,.75);--sh:0 12px 34px rgba(30,35,70,.09);--mesh:radial-gradient(900px 500px at 6% -10%,rgba(255,90,31,.17),transparent 62%),radial-gradient(800px 520px at 100% -5%,rgba(90,110,255,.15),transparent 60%),radial-gradient(700px 500px at 60% 110%,rgba(255,45,120,.09),transparent 60%);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#07080c;--s1:#12141b;--s2:#1a1d26;--bd:rgba(255,255,255,.08);--tx:#f1f2f6;--mu:#8b93a4;--ok:#2dd4a0;--bad:#ff5468;--warn:#f5b942;--in:#6b95ff;--gl:rgba(14,16,22,.75);--sh:0 14px 44px rgba(0,0,0,.5);--mesh:radial-gradient(900px 500px at 6% -10%,rgba(255,90,31,.24),transparent 62%),radial-gradient(800px 520px at 100% -5%,rgba(90,110,255,.2),transparent 60%),radial-gradient(700px 500px at 60% 110%,rgba(255,45,120,.13),transparent 60%)}}
@@ -112,6 +113,7 @@ details{margin-top:12px}summary{cursor:pointer;color:var(--mu);font-weight:600;m
 .kgrid.k4{grid-template-columns:repeat(4,1fr)}@media(max-width:900px){.kgrid.k4{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:900px){.stier{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .trend{width:100%;height:190px!important;display:block}.trend polyline{vector-effect:non-scaling-stroke}.tk2{display:flex;justify-content:space-between;font-size:11px;color:var(--mu);margin-top:4px}@media(max-width:900px){.trend{height:160px!important}}
+.thm{border:1px solid var(--bd);background:var(--s1);border-radius:12px;width:38px;height:38px;cursor:pointer;font-size:16px;flex:none}
 </style></head><body>
 <div class="app"><aside id="nav"></aside><main id="app"></main></div>
 <div id="drw"></div><div id="pal"></div><div id="toast"></div>
@@ -521,11 +523,12 @@ function vGrowth(){const M=model(),ds=growthDS(),C=exCtx(ds),G=growthStats(),L=d
 
 let RQ=0,LASTHTML='';
 function render(){if(RQ)return;RQ=requestAnimationFrame(()=>{RQ=0;renderNow()})}
+function togTheme(){const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('sptheme',t)}catch(e){}renderNow()}
 function renderNow(){
   const nv=`<div class="logo">S</div>`+NAV.map(([k,n])=>`<button class="n ${k===tab?'on':''}" onclick="go('${k}')">${ico(k)}${n}</button>`).join('')+`<button class="kbd" onclick="openPal()">⌘K</button>`;if($('#nav').innerHTML!==nv&&renderNow.nv!==nv){$('#nav').innerHTML=nv;renderNow.nv=nv}
   const keep={};document.querySelectorAll('#app input,#app select').forEach(i=>{if(i.id&&i.type!=='file')keep[i.id]=i.value});
   const TT={"home": "Home", "ads": "Ads", "orders": "Orders", "growth": "Growth", "content": "Content", "creatives": "Creatives", "tasks": "Tasks", "lab": "Lab", "money": "Money", "ask": "Ask", "data": "Setup"};
-  const topbar=`<div class="topbar"><span class="crumb">Spinoto OS / <b>${TT[tab]}</b></span><div class="gsearch" onclick="openPal()"><span>🔍</span><span>Search or jump to…</span><kbd>⌘K</kbd></div></div>`;
+  const topbar=`<div class="topbar"><span class="crumb">Spinoto OS / <b>${TT[tab]}</b></span><div class="gsearch" onclick="openPal()"><span>🔍</span><span>Search or jump to…</span><kbd>⌘K</kbd></div><button class="thm" onclick="togTheme()" title="Switch light / dark">${document.documentElement.dataset.theme==='dark'?'☀️':'🌙'}</button></div>`;
   const html=(db?'':skelHome())+topbar+({home:vHome,ads:vAds,orders:vOrders,growth:vGrowth,content:vContent,creatives:vCreatives,tasks:vTasks,lab:vLab,money:vMoney,ask:vAsk,data:vData}[tab]());
   if(html===LASTHTML&&$('#app').childElementCount)return;LASTHTML=html;
   const ae=document.activeElement,fid=ae&&ae.id&&ae.tagName==='INPUT'?ae.id:'',cr=fid&&ae.type==='text'?ae.selectionStart:null;
