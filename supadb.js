@@ -11,6 +11,12 @@ function makeSupaDB(client) {
     for (const row of data) cache[c][row.id] = row.data;
     return cache[c];
   }
+  // Order-independent deep compare (Postgres jsonb can reorder keys).
+  const stable = v => v && typeof v === 'object'
+    ? (Array.isArray(v) ? '[' + v.map(stable).join(',') + ']'
+      : '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + stable(v[k])).join(',') + '}')
+    : JSON.stringify(v);
+  const same = (a, b) => a !== undefined && stable(a) === stable(b);
   function fire(c) {
     const docs = Object.entries(cache[c] || {}).map(([id, data]) => ({ id, data: () => data }));
     (listeners[c] || []).forEach(cb => cb({ docs }));
@@ -21,8 +27,14 @@ function makeSupaDB(client) {
     client.channel('docs-' + c)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'docs', filter: `collection=eq.${c}` }, payload => {
         if (!cache[c]) cache[c] = {};
-        if (payload.eventType === 'DELETE') delete cache[c][payload.old.id];
-        else cache[c][payload.new.id] = payload.new.data;
+        // Skip the realtime echo of our own write: if nothing actually changed, don't re-render.
+        if (payload.eventType === 'DELETE') {
+          if (!(payload.old.id in cache[c])) return;
+          delete cache[c][payload.old.id];
+        } else {
+          if (same(cache[c][payload.new.id], payload.new.data)) return;
+          cache[c][payload.new.id] = payload.new.data;
+        }
         fire(c);
       }).subscribe();
   }
