@@ -131,7 +131,7 @@ const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+Stri
 const today=()=>iso(new Date()),addDays=(s,n)=>{const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+n);return iso(d)};
 const slug=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),norm=s=>String(s??'').replace(/\s+/g,' ').trim();
 let db=null,tab='home',armed='',warned='',busy=false,brief='',chat=[],PL=[],PI=[],SM=null,S={adsets:[],entries:[],wallet:[],expenses:[],experiments:[],settings:[],content:[],tasks:[],creatives:[],activity:[],orders:[],users:[],store:[],objectives:[]};
-const NAV=[['home','Home'],['ads','Ads'],['orders','Orders'],['growth','Growth'],['content','Content'],['creatives','Creatives'],['tasks','Tasks'],['lab','Lab'],['money','Money'],['ask','Ask'],['data','Setup']];
+const NAV=[['home','Home'],['ads','Ads'],['orders','Orders'],['growth','Growth'],['wa','WhatsApp'],['content','Content'],['creatives','Creatives'],['tasks','Tasks'],['lab','Lab'],['money','Money'],['ask','Ask'],['data','Setup']];
 const SYS="You are the growth analyst inside Spinoto's Marketing OS (doorstep 2-wheeler/4-wheeler servicing app, Ahmedabad). Use ONLY the JSON data given. Be direct, cite numbers, give concrete actions (scale/cut/test/log). Installs and leads are proxies for bookings — say so when it matters. Never invent data; if thin, say what to log. Max 150 words unless asked.";
 const G=()=>S.settings.find(x=>x.id==='goals')||{};
 function msg(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(msg.t);msg.t=setTimeout(()=>e.style.display='none',3800)}
@@ -143,7 +143,7 @@ const put=async(c,id,d,note)=>{if(!db){msg('Database not connected');return}try{
 const upd=async(c,id,d,note)=>{try{await db.collection(c).doc(id).update(d);if(LOGC[c]&&note)log(note[0],note[1])}catch(e){msg('Could not update: '+(e.message||e.code))}};
 const del=async(c,id)=>{const k=c+id;if(armed!==k){armed=k;render();return}armed='';try{await db.collection(c).doc(id).delete()}catch(e){msg('Could not delete: '+(e.message||e.code))}};
 const xb=(c,id)=>`<button class="x" onclick="del('${c}','${esc(id)}')">${armed===c+id?'Sure?':'✕'}</button>`;
-const go=t=>{tab=t;armed='';EX.pop='';closeAll();renderNow();scrollTo(0,0)};
+const go=t=>{tab=t;armed='';EX.pop='';closeAll();if(t==='wa'&&window.waEnter)waEnter();renderNow();scrollTo(0,0)};
 const B2B=/hiring|onboard|aggregator|recruit|partner/i;
 function calc(){const cat={};S.adsets.forEach(a=>cat[a.name]=a.category);const by={};S.entries.forEach(e=>(by[e.adset]=by[e.adset]||[]).push(e));const r=[];
   for(const k in by){const l=by[k].sort((a,b)=>a.date<b.date?-1:1),c=B2B.test(k)?'B2B':(cat[k]||'Other');
@@ -229,7 +229,7 @@ function vData(){const g=G();return`<div class="top"><h1>Setup</h1></div><h3>Mon
   <h3>Import from Excel tracker</h3><div class="c"><p class="mu" style="margin-top:0">Safe to repeat — same rows overwrite, nothing doubles. Pulls Adsets, Daily Entry, Wallet, Marketing Expenses, App Users, App Downloads &amp; Ratings, and App Orders.</p><input id="imp" type="file" accept=".xlsx,.xls"></div>
   <h3>Export / backup</h3><div class="row"><button class="btn g" onclick="exp('csv')">Entries CSV</button><button class="btn g" onclick="exp('json')">Full backup (JSON)</button></div>`}
 async function addObjective(){const n=norm(val('obj_new'));if(!n)return msg('Name required');if(OBJ_BASE.includes(n)||S.objectives.some(o=>o.name===n))return msg('Already exists');if(await put('objectives',slug(n),{name:n}))$('#obj_new').value=''}
-const IC={home:'M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',ads:'M4 20V11M10 20V4M16 20v-7M22 20H2',content:'M3 5h18v14H3z M10 9l5 3-5 3z',creatives:'M3 4h18v16H3z M3 16l5-5 4 4 3-3 6 6',tasks:'M4 12l5 5L20 6',orders:'M6 8h12l-1 13H7L6 8z M9 8V6a3 3 0 0 1 6 0v2',growth:'M3 17l6-6 4 4 8-8 M15 7h6v6',lab:'M9 3h6 M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3',money:'M6 4h12 M6 9h12 M6 4c6 0 8 2 8 5s-2 5-8 5l8 6',ask:'M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z',data:'M4 6h9 M17 6h3 M4 12h3 M11 12h9 M4 18h11 M19 18h1'};
+const IC={wa:'M21 11.5a8.5 8.5 0 0 1-12.4 7.6L3 21l1.9-5.4A8.5 8.5 0 1 1 21 11.5z',home:'M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',ads:'M4 20V11M10 20V4M16 20v-7M22 20H2',content:'M3 5h18v14H3z M10 9l5 3-5 3z',creatives:'M3 4h18v16H3z M3 16l5-5 4 4 3-3 6 6',tasks:'M4 12l5 5L20 6',orders:'M6 8h12l-1 13H7L6 8z M9 8V6a3 3 0 0 1 6 0v2',growth:'M3 17l6-6 4 4 8-8 M15 7h6v6',lab:'M9 3h6 M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3',money:'M6 4h12 M6 9h12 M6 4c6 0 8 2 8 5s-2 5-8 5l8 6',ask:'M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z',data:'M4 6h9 M17 6h3 M4 12h3 M11 12h9 M4 18h11 M19 18h1'};
 const ico=k=>`<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${IC[k]}"/></svg>`;
 const CHS=['Reels','YouTube','Meta Ads','WhatsApp','Offline','Blog/SEO','Influencer','Other'],STG=['Idea','Script','Shoot','Edit','Review','Scheduled','Live'],ANG=['Price','Pain','Convenience','Trust','Humour','Local','Comparison','Urgency'],PRI=['High','Medium','Low'],CFMT=['Video','Static','Carousel','Reel','Copy'],CST=['Draft','Testing','Winner','Retired'];
 const chC={Reels:'#ff2d78',YouTube:'#ff3b30','Meta Ads':'#4c7dff',WhatsApp:'#25d366',Offline:'#f5a524','Blog/SEO':'#9b7bff',Influencer:'#ff8a3d',Other:'#8b93a4'};
@@ -527,9 +527,9 @@ function togTheme(){const t=document.documentElement.dataset.theme==='dark'?'lig
 function renderNow(){
   const nv=`<div class="logo">S</div>`+NAV.map(([k,n])=>`<button class="n ${k===tab?'on':''}" onclick="go('${k}')">${ico(k)}${n}</button>`).join('')+`<button class="kbd" onclick="openPal()">⌘K</button>`;if($('#nav').innerHTML!==nv&&renderNow.nv!==nv){$('#nav').innerHTML=nv;renderNow.nv=nv}
   const keep={};document.querySelectorAll('#app input,#app select').forEach(i=>{if(i.id&&i.type!=='file')keep[i.id]=i.value});
-  const TT={"home": "Home", "ads": "Ads", "orders": "Orders", "growth": "Growth", "content": "Content", "creatives": "Creatives", "tasks": "Tasks", "lab": "Lab", "money": "Money", "ask": "Ask", "data": "Setup"};
+  const TT={"home": "Home", "ads": "Ads", "orders": "Orders", "growth": "Growth", "wa": "WhatsApp", "content": "Content", "creatives": "Creatives", "tasks": "Tasks", "lab": "Lab", "money": "Money", "ask": "Ask", "data": "Setup"};
   const topbar=`<div class="topbar"><span class="crumb">Spinoto OS / <b>${TT[tab]}</b></span><div class="gsearch" onclick="openPal()"><span>🔍</span><span>Search or jump to…</span><kbd>⌘K</kbd></div><button class="thm" onclick="togTheme()" title="Switch light / dark">${document.documentElement.dataset.theme==='dark'?'☀️':'🌙'}</button></div>`;
-  const html=(db?'':skelHome())+topbar+({home:vHome,ads:vAds,orders:vOrders,growth:vGrowth,content:vContent,creatives:vCreatives,tasks:vTasks,lab:vLab,money:vMoney,ask:vAsk,data:vData}[tab]());
+  const html=(db?'':skelHome())+topbar+({home:vHome,ads:vAds,orders:vOrders,growth:vGrowth,wa:()=>vWA(),content:vContent,creatives:vCreatives,tasks:vTasks,lab:vLab,money:vMoney,ask:vAsk,data:vData}[tab]());
   if(html===LASTHTML&&$('#app').childElementCount)return;LASTHTML=html;
   const ae=document.activeElement,fid=ae&&ae.id&&ae.tagName==='INPUT'?ae.id:'',cr=fid&&ae.type==='text'?ae.selectionStart:null;
   $('#app').classList.toggle('anim',renderNow.lt!==tab);renderNow.lt=tab;
@@ -537,7 +537,7 @@ function renderNow(){
   if(fid){const e=document.getElementById(fid);if(e){e.focus();if(cr!==null)try{e.setSelectionRange(cr,cr)}catch(_){}}}
   for(const id in keep){const e=document.getElementById(id);if(e&&keep[id]!=='')e.value=keep[id]}
   if(!$('#fab')){const b=document.createElement('button');b.id='fab';b.className='btn fab';document.body.appendChild(b)}
-  const F={home:['+ Quick add',()=>openPal()],content:['+ Content',()=>openForm('content')],creatives:['+ Creative',()=>openForm('creatives')],tasks:['+ Task',()=>openForm('tasks')]}[tab]||['+ Log',()=>openLog()],fb=$('#fab');fb.textContent=F[0];fb.onclick=F[1];fb.style.display=tab==='ask'||tab==='data'?'none':'';
+  const F={home:['+ Quick add',()=>openPal()],content:['+ Content',()=>openForm('content')],creatives:['+ Creative',()=>openForm('creatives')],tasks:['+ Task',()=>openForm('tasks')],wa:['+ Campaign',()=>waCampForm()]}[tab]||['+ Log',()=>openLog()],fb=$('#fab');fb.textContent=F[0];fb.onclick=F[1];fb.style.display=tab==='ask'||tab==='data'?'none':'';
   const f=$('#imp');if(f)f.onchange=()=>f.files[0]&&doImport(f.files[0]);if($('#so'))sim($('input[type=range]').value);if(tab==='ads')hint();
   const ch=$('#ch');if(ch){const tt=$('#tt');ch.onpointermove=e=>{const r=ch.getBoundingClientRect(),n=CH.length,i=cl(Math.floor((e.clientX-r.left)/r.width*n),0,n-1),x=CH[i];tt.style.display='block';tt.innerHTML=`<b>${x.d}</b><br>${inr(x.spend)} · ${Math.round(x.inst)} installs · ${c1(x.cpi)}`;tt.style.left=cl(e.clientX-r.left-60,0,r.width-170)+'px'};ch.onpointerleave=()=>tt.style.display='none'}
   counters()}
@@ -591,9 +591,9 @@ async function init(){render();
   if(window.claude){db=await claude.use('db')}
   else if(window.SPINOTO_CONFIG && window.SPINOTO_CONFIG.SUPABASE_URL && window.supabase){
     const client=window.supabase.createClient(window.SPINOTO_CONFIG.SUPABASE_URL, window.SPINOTO_CONFIG.SUPABASE_ANON_KEY);
-    db=window.SpinotoRuntime.makeSupaDB(client);
+    window.SB=client;db=window.SpinotoRuntime.makeSupaDB(client);
   }
   if(!db){msg('Database not connected — check supabase-config.js');return}
   Object.keys(S).forEach(k=>db.collection(k).onSnapshot(sn=>{S[k]=sn.docs.map(x=>({id:x.id,...x.data()}));render()},e=>msg('Sync error: '+(e.message||e.code))))}
 init();
-</script></body></html>
+</script><script src="wa.js"></script></body></html>
