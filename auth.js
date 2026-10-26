@@ -1,7 +1,7 @@
 // ===== Login, roles & permissions, Team page =====
 // Roles live in Supabase (app_roles.perms = {tab: 'none'|'view'|'edit'}); the database enforces
 // the same rules with RLS, this file only shapes the UI around them.
-const PERM_TABS = [['home', 'Home'], ['ads', 'Ads'], ['orders', 'Orders'], ['growth', 'Growth'], ['wa', 'WhatsApp'], ['content', 'Content'], ['creatives', 'Creatives'], ['tasks', 'Tasks'], ['lab', 'Lab'], ['money', 'Money'], ['ask', 'Ask'], ['data', 'Setup']];
+const PERM_TABS = [['home', 'Home'], ['ads', 'Ads'], ['orders', 'Orders'], ['growth', 'Growth'], ['wa', 'WhatsApp'], ['content', 'Content'], ['creatives', 'Creatives'], ['tasks', 'Tasks'], ['lab', 'Lab'], ['money', 'Money'], ['data', 'Setup']];
 const OWNER_EMAIL = 'akshatbohra7@gmail.com';
 let ME = null, ROLES = [], TEAM = [], TM = { armed: '' };
 
