@@ -55,6 +55,7 @@ const topN = (rows, f, n) => { const c = {}; rows.forEach(r => { const k = f(r);
 // ---------- ORDER STATUS ----------
 const STS = [['CONFIRMED', 'Confirmed', 'var(--in)'], ['ASSIGNED', 'Assigned', 'var(--warn)'], ['COMPLETED', 'Completed', 'var(--ok)'], ['CANCELLED', 'Cancelled', 'var(--bad)'], ['FAILED', 'Failed', 'var(--mu)']];
 const stOf = x => { const t = String(x.status || '').toUpperCase(); return !t ? '' : /CANCEL/.test(t) ? 'CANCELLED' : /FAIL/.test(t) ? 'FAILED' : /COMPLET|DONE|DELIVER/.test(t) ? 'COMPLETED' : /ASSIGN|PROGRESS|STARTED|ON.?THE.?WAY|ARRIV/.test(t) ? 'ASSIGNED' : /CONFIRM|PLACED|NEW|PENDING|BOOKED/.test(t) ? 'CONFIRMED' : t };
+const stLabel = x => { const k = stOf(x), f = STS.find(s => s[0] === k); return f ? f[1] : String(x.status || '').toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()) }; window.stLabel = stLabel;
 function statusPanel(a, b) {
   const all = S.orders.filter(x => x.date && String(x.date).slice(0, 10) >= a && String(x.date).slice(0, 10) <= b && x.status);
   if (!all.length) return `<div class="empty">Order status arrives with the Google Sheet sync.</div>`;
@@ -62,7 +63,7 @@ function statusPanel(a, b) {
   const known = STS.map(([k, l, col]) => ({ k, l, col, n: c[k] || 0 })), other = all.length - known.reduce((s, x) => s + x.n, 0);
   const open = (c.CONFIRMED || 0) + (c.ASSIGNED || 0), lost = (c.CANCELLED || 0) + (c.FAILED || 0), done = c.COMPLETED || 0, closed = done + lost;
   return `<div class="sbar" style="height:12px;margin:2px 0 12px">${known.filter(x => x.n).map(x => `<span title="${x.l}: ${x.n}" style="width:${(x.n / all.length * 100).toFixed(1)}%;background:${x.col}"></span>`).join('')}</div>
-  ${known.map(x => `<div class="lr" style="grid-template-columns:12px minmax(0,1fr) 48px 44px;min-height:34px"><span style="width:10px;height:10px;border-radius:3px;background:${x.col}"></span><span>${x.l}</span><b class="mono" style="text-align:right">${x.n}</b><span class="mono mu" style="text-align:right;font-size:12px">${Math.round(x.n / all.length * 100)}%</span></div>`).join('')}${other > 0 ? `<div class="mu" style="font-size:12px;margin-top:6px">${other} with another status</div>` : ''}
+  ${known.map(x => `<div class="lr" style="grid-template-columns:12px minmax(0,1fr) 48px 44px;min-height:34px"><span style="width:10px;height:10px;border-radius:3px;background:${x.col}"></span><span>${x.l}</span><b class="mono" style="text-align:right">${x.n}</b><span class="mono mu" style="text-align:right;font-size:12px">${Math.round(x.n / all.length * 100)}%</span></div>`).join('')}${other > 0 ? `<div class="mu" style="font-size:12px;margin-top:6px">Other: ${Object.entries(all.filter(x => !STS.some(s => s[0] === stOf(x))).reduce((m, x) => { const l = stLabel(x); m[l] = (m[l] || 0) + 1; return m }, {})).map(([l, n]) => esc(l) + ' ' + n).join(' · ')}</div>` : ''}
   <div class="mu" style="font-size:12px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--bd)">${open ? `<b style="color:var(--tx)">${open}</b> still open · ` : ''}${closed ? `<b style="color:${lost / closed > .15 ? 'var(--bad)' : 'var(--tx)'}">${Math.round(lost / closed * 100)}%</b> of closed orders cancelled or failed` : 'None closed yet'}</div>`;
 }
 
@@ -74,7 +75,7 @@ function vHome2() {
   const ads = (a, b) => M.rows.filter(x => x.date >= a && x.date <= b), inst = r => sum(r.filter(x => x.cat === 'Install'), x => x.dRes), instSp = r => sum(r.filter(x => x.cat === 'Install'), x => x.dSpend);
   const aC = ads(R.a, R.b), aP = R.all ? null : ads(R.pa, R.pb);
   const sC = spendIn(R.a, R.b, M), sP = R.all ? null : spendIn(R.pa, R.pb, M);
-  const nw = r => r.filter(x => x._n === 1).length, rp = r => r.filter(x => x._n > 1).length;
+  const nw = r => r.filter(x => x._n === 1).length, rp = r => r.filter(x => x._n > 1).length, vo = r => r.filter(x => x._ok).length;
   const E = ECD(), cacC = nw(cur) ? sC.total / nw(cur) : 0, cacP = prev && nw(prev) ? sP.total / nw(prev) : null;
   const iC = inst(aC), iP = aP ? inst(aP) : null;
   const card = (tb, icon, label, value, d, note, dark) => `<button class="kp2 ${dark ? 'dark' : ''}" onclick="go('${tb}')"><span class="kh"><span class="ki">${v2ico(icon, 16)}</span>${label}</span><b>${value}</b><span class="kd ${d[1]}">${d[0] || '&nbsp;'}</span><span class="kn">${note}</span></button>`;
@@ -83,9 +84,9 @@ function vHome2() {
   const kpis = [
     card('money', 'money', 'Marketing spend', inr(sC.total), v2delta(sC.total, sP && sP.total, 2), incl ? 'Includes ' + incl : 'Nothing included — set in Analytics › Unit economics'),
     card('ads', 'phone', 'App installs', fmtN(iC), v2delta(iC, iP, 1), iC ? c1(instSp(aC) / iC) + ' per install' : 'From install adsets'),
-    card('orders', 'orders', 'Orders', fmtN(cur.length), v2delta(cur.length, prev && prev.length, 1), iC ? Math.round(cur.length / iC * 100) + '% of installs booked' : (cur.length ? (cur.length / R.n).toFixed(1) + ' per day' : 'No orders in this period')),
-    card('analytics', 'user', 'New customers', fmtN(nw(cur)), v2delta(nw(cur), prev && nw(prev), 1), cur.length ? Math.round(nw(cur) / cur.length * 100) + '% of orders are first-timers' : 'First-ever order by phone'),
-    card('analytics', 'repeat', 'Repeat orders', fmtN(rp(cur)), v2delta(rp(cur), prev && rp(prev), 1), cur.length ? Math.round(rp(cur) / cur.length * 100) + '% of orders' : 'Customers ordering again'),
+    card('orders', 'orders', 'Orders placed', fmtN(cur.length), v2delta(cur.length, prev && prev.length, 1), cur.length ? `${fmtN(vo(cur))} valid · ${fmtN(cur.length - vo(cur))} cancelled / failed` : 'No orders in this period'),
+    card('analytics', 'user', 'New customers', fmtN(nw(cur)), v2delta(nw(cur), prev && nw(prev), 1), vo(cur) ? Math.round(nw(cur) / vo(cur) * 100) + '% of valid orders are first-timers' : 'First-ever valid order by phone'),
+    card('analytics', 'repeat', 'Repeat orders', fmtN(rp(cur)), v2delta(rp(cur), prev && rp(prev), 1), vo(cur) ? Math.round(rp(cur) / vo(cur) * 100) + '% of valid orders' : 'Customers ordering again'),
     card('analytics', 'cac', 'Cost per customer', cacC ? inr(cacC) : '—', cacD, 'Spend ÷ new customers' + (+E.target ? ' · target ' + inr(+E.target) : ''), true)
   ].join('');
   // orders split
@@ -139,9 +140,9 @@ let AR = { q: '', veh: 'All', per: 'all', sort: 'n', lim: 25 };
 function areaRows() {
   const O = ordersAll(), t = today(), from = AR.per === 'all' ? '' : addDays(t, AR.per === '30d' ? -29 : -89);
   const L = O.filter(x => (!from || x.date >= from) && (AR.veh === 'All' || vehOf(x) === AR.veh)), g = {};
-  L.forEach(x => { const a = areaOf(x); if (a === '—') return; const o = g[a] = g[a] || { a, R: [], c: new Set(), t: 0, f: 0, last: '', first: x.date }; o.R.push(x); o.c.add(x._c); vehOf(x) === '2W' ? o.t++ : vehOf(x) === '4W' ? o.f++ : 0; if (x.date > o.last) o.last = x.date; if (x.date < o.first) o.first = x.date });
+  L.forEach(x => { const a = areaOf(x); if (a === '—') return; const o = g[a] = g[a] || { a, R: [], c: new Set(), t: 0, f: 0, cx: 0, last: '', first: x.date }; o.R.push(x); if (x._ok) o.c.add(x._c); else o.cx++; vehOf(x) === '2W' ? o.t++ : vehOf(x) === '4W' ? o.f++ : 0; if (x.date > o.last) o.last = x.date; if (x.date < o.first) o.first = x.date });
   const wk = [...Array(8)].map((_, i) => addDays(t, -7 * (8 - i) + 1));
-  return { O, L, rows: Object.values(g).map(o => ({ ...o, n: o.R.length, cu: o.c.size, fq: o.R.length / o.c.size, top: (topN(o.R, x => v2n(x.items), 1)[0] || ['—'])[0], spark: wk.map(w => o.R.filter(x => x.date >= w && x.date <= addDays(w, 6)).length) })) };
+  return { O, L, rows: Object.values(g).map(o => ({ ...o, n: o.R.length, cu: o.c.size, fq: o.c.size ? (o.R.length - o.cx) / o.c.size : 0, top: (topN(o.R, x => v2n(x.items), 1)[0] || ['—'])[0], spark: wk.map(w => o.R.filter(x => x.date >= w && x.date <= addDays(w, 6)).length) })) };
 }
 function vAreas(embed) {
   const { O, L, rows } = areaRows(), q = AR.q.toLowerCase();
@@ -153,15 +154,15 @@ function vAreas(embed) {
   const segB = (k, opts) => `<div class="pseg">${opts.map(([v, l]) => `<button class="${AR[k] === v ? 'on' : ''}" onclick="AR.${k}='${v}';AR.lim=25;renderNow()">${l}</button>`).join('')}</div>`;
   const th = (k, l) => `<th onclick="AR.sort='${k}';renderNow()" style="${AR.sort === k ? 'color:var(--tx)' : ''}">${l}${AR.sort === k ? ' ↓' : ''}</th>`;
   return `${embed ? '' : `<div class="v2h"><div><button class="lnk" onclick="go('home')">← Today</button><h1 class="h1" style="margin:4px 0 0">Areas</h1><div class="sub">Every area we've had an order from${AR.per === 'all' ? ', since the first order logged' : ''}</div></div><button class="btn g" onclick="areaCSV()">Export CSV</button></div>`}
-  <div class="big4"><div><small>Areas served</small><b>${rows.length}</b><span>${fresh ? '+' + fresh + ' new this month' : 'in this view'}</span></div><div><small>Orders</small><b>${fmtN(L.length)}</b><span>2W ${fmtN(L.filter(x => vehOf(x) === '2W').length)} · 4W ${fmtN(L.filter(x => vehOf(x) === '4W').length)}</span></div><div><small>Top 5 areas</small><b>${Math.round(top5 / tot * 100)}%</b><span>of these orders</span></div><div><small>Most loyal area</small><b style="font-size:24px">${loyal ? esc(loyal.a) : '—'}</b><span>${loyal ? loyal.fq.toFixed(1) + ' orders per customer' : 'Needs 5+ customers'}</span></div></div>
+  <div class="big4"><div><small>Areas served</small><b>${rows.length}</b><span>${fresh ? '+' + fresh + ' new this month' : 'in this view'}</span></div><div><small>Orders placed</small><b>${fmtN(L.length)}</b><span>2W ${fmtN(L.filter(x => vehOf(x) === '2W').length)} · 4W ${fmtN(L.filter(x => vehOf(x) === '4W').length)}</span></div><div><small>Top 5 areas</small><b>${Math.round(top5 / tot * 100)}%</b><span>of these orders</span></div><div><small>Most loyal area</small><b style="font-size:24px">${loyal ? esc(loyal.a) : '—'}</b><span>${loyal ? loyal.fq.toFixed(1) + ' orders per customer' : 'Needs 5+ customers'}</span></div></div>
   <div class="toolbar"><input class="srch" placeholder="Search area" value="${esc(AR.q)}" oninput="AR.q=this.value;render()" id="ar_q" style="max-width:280px">${segB('veh', [['All', 'All'], ['2W', '2-wheeler'], ['4W', '4-wheeler']])}${segB('per', [['30d', '30D'], ['90d', '90D'], ['all', 'All time']])}</div>
-  <section class="c" style="padding:0;overflow:hidden"><div class="w"><table class="at"><tr>${th('n', '#')}${th('a', 'Area')}${th('n', 'Orders')}${th('cu', 'Customers')}${th('fq', 'Orders / customer')}<th style="width:180px">2W / 4W</th><th>Top service</th><th>Last 8 weeks</th>${th('last', 'Last order')}</tr>
-  ${vis.slice(0, AR.lim).map((r, i) => { const p = r.t + r.f ? Math.round(r.t / (r.t + r.f) * 100) : 0; return `<tr><td class="mono mu">${i + 1}</td><td><b style="font-weight:600">${esc(r.a)}</b></td><td class="mono"><b>${r.n}</b></td><td class="mono">${r.cu}</td><td class="mono">${r.fq.toFixed(1)}</td><td><div class="row" style="margin:0;flex-wrap:nowrap"><span class="sbar" style="flex:1;height:10px"><span class="c2w" style="width:${p}%"></span><span class="c4w" style="width:${r.t + r.f ? 100 - p : 0}%"></span></span><span class="mono mu" style="font-size:11px">${r.t + r.f ? p + ' / ' + (100 - p) : '—'}</span></div></td><td class="mu" style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(r.top)}</td><td><svg viewBox="0 0 70 20" width="70" height="20" aria-hidden="true"><polyline points="${sp(r.spark)}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></td><td class="mu">${fd(r.last)}</td></tr>` }).join('') || '<tr><td colspan="9" class="mu" style="padding:20px">No orders with an area in this view.</td></tr>'}</table></div>
+  <section class="c" style="padding:0;overflow:hidden"><div class="w"><table class="at"><tr>${th('n', '#')}${th('a', 'Area')}${th('n', 'Orders placed')}<th>Cancelled</th>${th('cu', 'Customers')}${th('fq', 'Orders / customer')}<th style="width:180px">2W / 4W</th><th>Top service</th><th>Last 8 weeks</th>${th('last', 'Last order')}</tr>
+  ${vis.slice(0, AR.lim).map((r, i) => { const p = r.t + r.f ? Math.round(r.t / (r.t + r.f) * 100) : 0; return `<tr><td class="mono mu">${i + 1}</td><td><b style="font-weight:600">${esc(r.a)}</b></td><td class="mono"><b>${r.n}</b></td><td class="mono" style="color:${r.cx / r.n > .3 ? 'var(--bad)' : 'var(--mu)'}">${r.cx ? Math.round(r.cx / r.n * 100) + '%' : '—'}</td><td class="mono">${r.cu}</td><td class="mono">${r.fq.toFixed(1)}</td><td><div class="row" style="margin:0;flex-wrap:nowrap"><span class="sbar" style="flex:1;height:10px"><span class="c2w" style="width:${p}%"></span><span class="c4w" style="width:${r.t + r.f ? 100 - p : 0}%"></span></span><span class="mono mu" style="font-size:11px">${r.t + r.f ? p + ' / ' + (100 - p) : '—'}</span></div></td><td class="mu" style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(r.top)}</td><td><svg viewBox="0 0 70 20" width="70" height="20" aria-hidden="true"><polyline points="${sp(r.spark)}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></td><td class="mu">${fd(r.last)}</td></tr>` }).join('') || '<tr><td colspan="10" class="mu" style="padding:20px">No orders with an area in this view.</td></tr>'}</table></div>
   <div class="row" style="justify-content:space-between;margin:0;padding:12px 20px;border-top:1px solid var(--line);font-size:12px"><span class="mu">Showing ${Math.min(AR.lim, vis.length)} of ${vis.length} areas</span>${vis.length > AR.lim ? `<button class="btn g sm" onclick="AR.lim=9999;renderNow()">Show all</button>` : ''}</div></section>`;
 }
 function areaCSV() {
   const { rows } = areaRows(), q = s => /[",\n]/.test(s) ? '"' + String(s).replace(/"/g, '""') + '"' : s;
-  const data = 'Area,Orders,Customers,Orders per customer,2W,4W,Top service,Last order\n' + rows.sort((a, b) => b.n - a.n).map(r => [q(r.a), r.n, r.cu, r.fq.toFixed(2), r.t, r.f, q(r.top), r.last].join(',')).join('\n');
+  const data = 'Area,Orders placed,Cancelled or failed,Customers,Valid orders per customer,2W,4W,Top service,Last order\n' + rows.sort((a, b) => b.n - a.n).map(r => [q(r.a), r.n, r.cx, r.cu, r.fq.toFixed(2), r.t, r.f, q(r.top), r.last].join(',')).join('\n');
   window.SpinotoRuntime.browserDownload({ filename: 'spinoto-areas-' + today() + '.csv', data });
 }
 
@@ -178,11 +179,11 @@ function vAnalytics() {
   const n2 = cur.filter(x => vehOf(x) === '2W').length, nw = cur.filter(x => x._n === 1).length, sp = spendIn(R.a, R.b, M);
   const wdTop = (() => { const c = WD.map((d, i) => [d, cur.filter(x => new Date(x.date + 'T00:00:00').getDay() === i).length]).sort((a, b) => b[1] - a[1]); return c[0] && c[0][1] ? 'Peak: ' + c[0][0] : 'No orders yet' })();
   const L = [
-    ['orders', 'orders', 'Orders', fmtN(cur.length) + ' in period'], ['ads', 'ads', 'Advertising', inr(sum(M.rows.filter(x => x.date >= R.a && x.date <= R.b), x => x.dSpend)) + ' spend'],
+    ['orders', 'orders', 'Orders', fmtN(cur.length) + ' placed · ' + fmtN(cur.filter(x => !x._ok).length) + ' cancelled'], ['ads', 'ads', 'Advertising', inr(sum(M.rows.filter(x => x.date >= R.a && x.date <= R.b), x => x.dSpend)) + ' spend'],
     ['installs', 'growth', 'Installs & users', (growthDS().last ? fmtN(growthDS().last.total) + ' users' : 'Log app users')], ['vehicles', 'car', 'Vehicles & models', cur.length ? `2W ${Math.round(n2 / cur.length * 100)}% · 4W ${100 - Math.round(n2 / cur.length * 100)}%` : '—'],
     ['services', 'wrench', 'Services sold', (topN(cur, x => v2n(x.items), 1)[0] || ['—'])[0]], ['areas', 'areas', 'Areas', new Set(cur.map(areaOf).filter(a => a !== '—')).size + ' areas'],
     ['days', 'clock', 'Days & times', wdTop], ['econ', 'cac', 'CAC & unit economics', nw ? inr(sp.total / nw) + ' per customer' : '—'],
-    ['wa', 'wa', 'WhatsApp', (window.W && W.loaded && W.sum) ? fmtN(W.sum.total) + ' sent' : 'Campaigns'], ['repeat', 'repeat', 'Repeat customers', cur.length ? Math.round((cur.length - nw) / cur.length * 100) + '% of orders' : '—'],
+    ['wa', 'wa', 'WhatsApp', (window.W && W.loaded && W.sum) ? fmtN(W.sum.total) + ' sent' : 'Campaigns'], ['repeat', 'repeat', 'Repeat customers', cur.filter(x => x._ok).length ? Math.round((cur.filter(x => x._ok).length - nw) / cur.filter(x => x._ok).length * 100) + '% of valid orders' : '—'],
     ['spend', 'money', 'Spend', 'Ads, PR & other']
   ].filter(([k]) => !((k === 'spend') && canTab('money') === 'none') && !(k === 'wa' && canTab('wa') === 'none') && !(k === 'ads' && canTab('ads') === 'none'));
   if (!L.find(x => x[0] === AN.lens)) AN.lens = 'orders';
@@ -220,6 +221,7 @@ function vDays(M, O) {
   <div style="margin-top:14px">${exBreak(ds, C)}</div>`;
 }
 function cohorts(O) {
+  O = O.filter(x => x._ok);
   const first = {}; O.forEach(x => { if (!first[x._c] || x.date < first[x._c]) first[x._c] = x.date });
   const ms = []; for (let i = 5; i >= 0; i--) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); ms.push(iso(d).slice(0, 7)) }
   const mAdd = (m, k) => { const d = new Date(m + '-01T00:00:00'); d.setMonth(d.getMonth() + k); return iso(d).slice(0, 7) }, now = today().slice(0, 7);
@@ -230,7 +232,7 @@ function cohortTable(O) {
   return `<div class="w"><table style="border-collapse:separate;border-spacing:4px;min-width:480px"><tr><th>First order</th><th>Customers</th><th style="text-align:center">Month +1</th><th style="text-align:center">Month +2</th><th style="text-align:center">Month +3</th></tr>${C.map(r => `<tr><td style="border:0;font-weight:600">${new Date(r.m + '-01T00:00:00').toLocaleString('en', { month: 'short', year: '2-digit' })}</td><td class="mono" style="border:0">${r.n}</td>${r.cells.map(v => `<td style="border:0;text-align:center;border-radius:6px;font:500 12px 'Geist Mono',monospace;padding:9px 4px;background:${v === null ? 'var(--s2)' : `rgba(21,23,28,${(0.06 + v / 40 * .8).toFixed(2)})`};color:${v > 20 ? '#fff' : 'var(--tx)'}">${v === null ? '' : v + '%'}</td>`).join('')}</tr>`).join('')}</table></div>`;
 }
 function vRepeat(O) {
-  const ds = dsVariant('rep', 'cust', {}), C = exCtx(ds), cust = {}; O.forEach(x => cust[x._c] = (cust[x._c] || 0) + 1);
+  const ds = dsVariant('rep', 'cust', {}), C = exCtx(ds), cust = {}; O = O.filter(x => x._ok); O.forEach(x => cust[x._c] = (cust[x._c] || 0) + 1);
   const n = Object.keys(cust).length, rep = Object.values(cust).filter(v => v > 1).length, avg = n ? O.length / n : 0;
   const gaps = []; const by = {}; O.forEach(x => (by[x._c] = by[x._c] || []).push(x.date)); Object.values(by).forEach(d => { d.sort(); for (let i = 1; i < d.length; i++)gaps.push(dd(d[i - 1], d[i]) - 1) });
   const mg = gaps.length ? gaps.sort((a, b) => a - b)[Math.floor(gaps.length / 2)] : null;
@@ -242,9 +244,9 @@ function vEcon(M, O) {
   const E = ECD(), R = exRange(O.length ? O : M.rows), cur = inR(O, R.a, R.b), prev = R.all ? null : inR(O, R.pa, R.pb);
   const sp = spendIn(R.a, R.b, M), spP = prev ? spendIn(R.pa, R.pb, M) : null, nw = cur.filter(x => x._n === 1), nwP = prev ? prev.filter(x => x._n === 1) : null;
   const cac = nw.length ? sp.total / nw.length : 0, cacP = nwP && nwP.length ? spP.total / nwP.length : null;
-  const withAmt = O.filter(x => amtOf(x) > 0), aov = withAmt.length ? sum(withAmt, amtOf) / withAmt.length : 0, comm = parseFloat(E.comm) || 0, cpo = aov * comm / 100;
-  const first = {}; O.forEach(x => { if (!first[x._c] || x.date < first[x._c]) first[x._c] = x.date });
-  const t = today(), coh = Object.keys(first).filter(c => first[c] <= addDays(t, -90)), opc = coh.length ? coh.reduce((s, c) => s + O.filter(x => x._c === c && x.date <= addDays(first[c], 89)).length, 0) / coh.length : (O.length && Object.keys(first).length ? O.length / Object.keys(first).length : 0);
+  const withAmt = O.filter(x => x._ok && amtOf(x) > 0), aov = withAmt.length ? sum(withAmt, amtOf) / withAmt.length : 0, comm = parseFloat(E.comm) || 0, cpo = aov * comm / 100;
+  const first = {}; O.forEach(x => { if (x._ok && (!first[x._c] || x.date < first[x._c])) first[x._c] = x.date });
+  const t = today(), coh = Object.keys(first).filter(c => first[c] <= addDays(t, -90)), opc = coh.length ? coh.reduce((s, c) => s + O.filter(x => x._ok && x._c === c && x.date <= addDays(first[c], 89)).length, 0) / coh.length : (Object.keys(first).length ? O.filter(x => x._ok).length / Object.keys(first).length : 0);
   const ltv = cpo * opc, ratio = cac && ltv ? ltv / cac : 0, payback = cpo && cac ? cac / cpo : 0, tgt = +E.target || 0;
   // channel
   const plat = {}; S.adsets.forEach(a => plat[a.name] = (a.platform || '').toLowerCase());

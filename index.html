@@ -379,16 +379,16 @@ function exBreak(ds,C){const dim=ds.dims[EX.by[ds.k]]?EX.by[ds.k]:Object.keys(ds
 
 // --- Orders dataset ---
 function ordDS(){const n2=s=>norm(String(s||'').replace(/\n/g,' ')),cnt={};
-  const o=S.orders.filter(x=>x.date&&!/cancel|fail/i.test(x.status||'')).map(x=>({...x,date:String(x.date).slice(0,10)})).sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
-  o.forEach(x=>{x._c=n2(x.contact)||n2(x.name).toLowerCase();cnt[x._c]=(cnt[x._c]||0)+1;x._n=cnt[x._c]});o.forEach(x=>x._t=cnt[x._c]);
+  const o=S.orders.filter(x=>x.date).map(x=>({...x,date:String(x.date).slice(0,10),_ok:!/cancel|fail/i.test(x.status||'')})).sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
+  o.forEach(x=>{x._c=n2(x.contact).replace(/\D/g,'').slice(-10)||n2(x.name).toLowerCase();if(x._ok){cnt[x._c]=(cnt[x._c]||0)+1;x._n=cnt[x._c]}else x._n=0});o.forEach(x=>x._t=cnt[x._c]);
   const gap=R=>{const g=R.filter(x=>x.joined&&x._n===1).map(x=>dd(String(x.joined).slice(0,10),x.date)-1).filter(x=>x>=0);return g.length?g.reduce((a,b)=>a+b,0)/g.length:0};
   return{k:'orders',rows:o,
-    dims:{area:{l:'Area',v:r=>n2(r.area)||'—'},service:{l:'Service',v:r=>n2(r.items)||'—'},vehicle:{l:'Vehicle',v:r=>n2(r.vehicle)||'—'},booking:{l:'Booking',v:r=>n2(r.booking)||'—'},cust:{l:'Customer',v:r=>r._n>1?'Repeat':'New'},wd:{l:'Weekday',v:r=>WD[new Date(r.date+'T00:00:00').getDay()]}},
-    ms:[{k:'n',l:'Orders',f:R=>R.length,fmt:fmtN,up:1},{k:'cu',l:'Customers',f:R=>new Set(R.map(r=>r._c)).size,fmt:fmtN,up:1},{k:'nw',l:'New customers',f:R=>R.filter(r=>r._n===1).length,fmt:fmtN,up:1},
-      {k:'rp',l:'Repeat orders',f:R=>R.length?R.filter(r=>r._n>1).length/R.length*100:0,fmt:pct,up:1},{k:'pd',l:'Orders / day',f:(R,n)=>n?R.length/n:0,fmt:x=>x.toFixed(1),up:1},
+    dims:{status:{l:'Status',v:r=>(window.stLabel?stLabel(r):n2(r.status))||'—'},area:{l:'Area',v:r=>n2(r.area)||'—'},service:{l:'Service',v:r=>n2(r.items)||'—'},vehicle:{l:'Vehicle',v:r=>n2(r.vehicle)||'—'},booking:{l:'Booking',v:r=>n2(r.booking)||'—'},cust:{l:'Customer',v:r=>!r._ok?'Cancelled / failed':r._n>1?'Repeat':'New'},wd:{l:'Weekday',v:r=>WD[new Date(r.date+'T00:00:00').getDay()]}},
+    ms:[{k:'n',l:'Orders placed',f:R=>R.length,fmt:fmtN,up:1},{k:'ok',l:'Valid orders',f:R=>R.filter(r=>r._ok).length,fmt:fmtN,up:1},{k:'cx',l:'Cancelled / failed',f:R=>R.filter(r=>!r._ok).length,fmt:fmtN,up:0},{k:'cu',l:'Customers',f:R=>new Set(R.filter(r=>r._ok).map(r=>r._c)).size,fmt:fmtN,up:1},{k:'nw',l:'New customers',f:R=>R.filter(r=>r._n===1).length,fmt:fmtN,up:1},
+      {k:'rp',l:'Repeat share',f:R=>{const v=R.filter(r=>r._ok);return v.length?v.filter(r=>r._n>1).length/v.length*100:0},fmt:pct,up:1},{k:'pd',l:'Orders / day',f:(R,n)=>n?R.length/n:0,fmt:x=>x.toFixed(1),up:1},
       ...(o.some(x=>x.joined)?[{k:'jg',l:'Join → 1st order',f:gap,fmt:x=>x?x.toFixed(1)+'d':'—',up:0}]:[])],
-    tm:['n','nw'],bm:['cu','rp'],ins:['area','service','vehicle','booking'],
-    extra:C=>{const rp=C.cur.filter(r=>r._n>1).length;return C.cur.length?[['↻',`<b>${rp}</b> of ${C.cur.length} orders came from returning customers.`]]:[]}}}
+    tm:['n','ok','nw'],bm:['ok','cx','nw'],ins:['status','area','service','vehicle','booking'],
+    extra:C=>{const v=C.cur.filter(r=>r._ok),rp=v.filter(r=>r._n>1).length,cx=C.cur.length-v.length;return C.cur.length?[['↻',`<b>${rp}</b> of ${v.length} valid orders came from returning customers.`],...(cx?[['✕',`<b>${cx}</b> of ${C.cur.length} placed orders (${Math.round(cx/C.cur.length*100)}%) were cancelled or failed.`]]:[])]:[]}}}
 function vOrders(){const ds=ordDS(),C=exCtx(ds),q=(EX.q.orders||'').toLowerCase(),lim=EX.lim.orders||30;
   const L=C.cur.filter(x=>!q||[x.name,x.contact,x.area,x.items,x.vehicle].some(v=>String(v||'').toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
   return`<div class="top"><div><h1>Orders</h1><span class="mu">${ds.rows.length} logged all-time</span></div><button class="btn" onclick="openForm('orders')">+ New order</button></div>
@@ -400,7 +400,7 @@ function vOrders(){const ds=ordDS(),C=exCtx(ds),q=(EX.q.orders||'').toLowerCase(
 function orderList(L){if(!L.length)return'<div class="c mu">No orders match this view.</div>';
   const ord=n=>n+(n%100>10&&n%100<14?'th':['th','st','nd','rd'][n%10]||'th');
   return`<div class="ol c">${L.map(x=>{const v=String(x.vehicle||''),w=/4|car/i.test(v)?'v4':/2|bike|scoot/i.test(v)?'v2':'',it=norm(String(x.items||'').replace(/\n/g,' '));
-    return`<div class="oc">${av(x.name||'?')}<div class="on1"><b>${esc(x.name||'Unknown')}</b>${x._t>1?`<span class="chip rep">↻ ${ord(x._n)}</span>`:'<span class="chip nw">New</span>'}</div>
+    return`<div class="oc">${av(x.name||'?')}<div class="on1"><b>${esc(x.name||'Unknown')}</b>${!x._ok?`<span class="chip" style="color:var(--bad)">${esc(x.status)}</span>`:x._t>1?`<span class="chip rep">↻ ${ord(x._n)}</span>`:'<span class="chip nw">New</span>'}</div>
     <div class="it" title="${esc(it)}">${esc(it)||'<span class="mu">—</span>'}</div>
     <div class="tg">${v?`<span class="chip ${w}">${esc(v)}</span>`:''}${x.booking?`<span class="chip">${esc(x.booking)}</span>`:''}${x.area?`<span class="chip">📍 ${esc(x.area)}</span>`:''}</div>
     <div class="rt">${fd(x.date)}</div>${xb('orders',x.id)}</div>`}).join('')}</div>`}
