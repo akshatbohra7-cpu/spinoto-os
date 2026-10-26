@@ -5,10 +5,14 @@ function makeSupaDB(client) {
   const cache = {};     // collection -> {id: data}
 
   async function fetchAll(c) {
-    const { data, error } = await client.from('docs').select('id,data').eq('collection', c);
-    if (error) throw error;
-    cache[c] = {};
-    for (const row of data) cache[c][row.id] = row.data;
+    const fresh = {};
+    for (let from = 0; ; from += 1000) { // PostgREST returns at most 1000 rows per request
+      const { data, error } = await client.from('docs').select('id,data').eq('collection', c).order('id').range(from, from + 999);
+      if (error) throw error;
+      for (const row of data) fresh[row.id] = row.data;
+      if (data.length < 1000) break;
+    }
+    cache[c] = fresh;
     return cache[c];
   }
   // Order-independent deep compare (Postgres jsonb can reorder keys).

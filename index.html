@@ -117,10 +117,12 @@ details{margin-top:12px}summary{cursor:pointer;color:var(--mu);font-weight:600;m
 </style></head><body>
 <div class="app"><aside id="nav"></aside><main id="app"></main></div>
 <div id="drw"></div><div id="pal"></div><div id="toast"></div>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap" rel="stylesheet"><link rel="stylesheet" href="theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase-config.js"></script>
 <script src="supadb.js"></script>
 <script src="auth.js"></script>
+<script src="v2.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const $=s=>document.querySelector(s),GST=.18,MIN=500;
@@ -132,7 +134,7 @@ const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+Stri
 const today=()=>iso(new Date()),addDays=(s,n)=>{const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+n);return iso(d)};
 const slug=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),norm=s=>String(s??'').replace(/\s+/g,' ').trim();
 let db=null,tab='home',armed='',warned='',busy=false,brief='',chat=[],PL=[],PI=[],SM=null,S={adsets:[],entries:[],wallet:[],expenses:[],experiments:[],settings:[],content:[],tasks:[],creatives:[],activity:[],orders:[],users:[],store:[],objectives:[]};
-const NAV=[['home','Home'],['ads','Ads'],['orders','Orders'],['growth','Growth'],['wa','WhatsApp'],['content','Content'],['creatives','Creatives'],['tasks','Tasks'],['lab','Lab'],['money','Money'],['data','Setup']];
+const NAV=[['home','Today'],['analytics','Analytics'],['ads','Ads'],['wa','WhatsApp'],['content','Content'],['creatives','Creatives'],['orders','Orders'],['areas','Areas'],['money','Wallet & spend'],['lab','Experiments'],['growth','App growth'],['data','Settings']];
 const SYS="You are the growth analyst inside Spinoto's Marketing OS (doorstep 2-wheeler/4-wheeler servicing app, Ahmedabad). Use ONLY the JSON data given. Be direct, cite numbers, give concrete actions (scale/cut/test/log). Installs and leads are proxies for bookings — say so when it matters. Never invent data; if thin, say what to log. Max 150 words unless asked.";
 const G=()=>S.settings.find(x=>x.id==='goals')||{};
 function msg(t){t=String(t);if(/row-level security|permission denied|not allowed/i.test(t))t='You have view-only access here — ask your Super Admin for edit access.';const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(msg.t);msg.t=setTimeout(()=>e.style.display='none',3800)}
@@ -272,7 +274,7 @@ function vCreatives(){const M=model(),L=S.creatives.filter(x=>cfil==='All'||x.an
 const FORMS={content:{t:'content',f:[['title','Title','text'],['channel','Channel',CHS],['stage','Stage',STG],['owner','Owner','owner'],['due','Due date','date'],['angle','Angle',ANG],['notes','Hook / notes','text']],d:{channel:'Reels',stage:'Idea',angle:'Convenience'}},
   tasks:{t:'task',f:[['title','Task','text'],['owner','Owner','owner'],['due','Due','date'],['prio','Priority',PRI]],d:{prio:'Medium'}},
   creatives:{t:'creative',f:[['name','Name','text'],['format','Format',CFMT],['angle','Angle',ANG],['status','Status',CST],['adset','Linked adset','adset'],['link','Link (Drive / Zoho)','text']],d:{format:'Video',status:'Draft',angle:'Convenience'}},
-  orders:{t:'order',f:[['name','Customer name','text'],['contact','Contact number','text'],['date','Date of order','date'],['joined','Joining date','date'],['vehicle','Vehicle type',['2W','4W']],['booking','Booking type',['Instant','Schedule']],['items','Items / services','text'],['location','Location (address)','text'],['area','Area','text']],d:{vehicle:'2W',booking:'Instant',date:today()}}};
+  orders:{t:'order',f:[['name','Customer name','text'],['contact','Contact number','text'],['date','Date of order','date'],['joined','Joining date','date'],['vehicle','Vehicle type',['2W','4W']],['booking','Booking type',['Instant','Schedule']],['items','Items / services','text'],['location','Location (address)','text'],['area','Area','text'],['model','Vehicle model','text'],['amount','Order value ₹','text'],['source','Source',['','Meta Ads','Google Ads','WhatsApp','Referral','Organic','Influencer','Hotstar','Other']]],d:{vehicle:'2W',booking:'Instant',date:today()}}};
 function openForm(k,it={}){const F=FORMS[k],v={...F.d,...it},own=[...new Set([...S.content,...S.tasks].map(x=>x.owner).filter(Boolean))];
   const inp=([id,l,t])=>`<div><label>${l}</label>`+(Array.isArray(t)?`<select id="f_${id}">${t.map(o=>`<option ${o===v[id]?'selected':''}>${o}</option>`).join('')}</select>`:t==='adset'?`<select id="f_${id}"><option value="">—</option>${S.adsets.map(a=>`<option ${a.name===v[id]?'selected':''}>${esc(a.name)}</option>`).join('')}</select>`:`<input id="f_${id}" ${t==='date'?'type="date"':t==='owner'?'list="own"':''} value="${esc(v[id]||'')}">`)+'</div>';
   closeAll();$('#drw').innerHTML=`<div class="ov r" onclick="closeAll()"><div class="bx dr" onclick="event.stopPropagation()"><div class="row" style="justify-content:space-between"><b style="font-size:19px">${it.id?'Edit':'New'} ${F.t}</b><button class="x" onclick="closeAll()" style="color:var(--mu)">✕</button></div><div class="f" style="grid-template-columns:1fr;margin-top:14px">${F.f.map(inp).join('')}${k==='creatives'?'<div><label>Upload image / video (optional)</label><input id="f_file" type="file" accept="image/*,video/*"></div>':''}</div><datalist id="own">${own.map(o=>`<option>${esc(o)}</option>`).join('')}</datalist>
@@ -377,7 +379,7 @@ function exBreak(ds,C){const dim=ds.dims[EX.by[ds.k]]?EX.by[ds.k]:Object.keys(ds
 
 // --- Orders dataset ---
 function ordDS(){const n2=s=>norm(String(s||'').replace(/\n/g,' ')),cnt={};
-  const o=S.orders.filter(x=>x.date).map(x=>({...x,date:String(x.date).slice(0,10)})).sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
+  const o=S.orders.filter(x=>x.date&&!/cancel|fail/i.test(x.status||'')).map(x=>({...x,date:String(x.date).slice(0,10)})).sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
   o.forEach(x=>{x._c=n2(x.contact)||n2(x.name).toLowerCase();cnt[x._c]=(cnt[x._c]||0)+1;x._n=cnt[x._c]});o.forEach(x=>x._t=cnt[x._c]);
   const gap=R=>{const g=R.filter(x=>x.joined&&x._n===1).map(x=>dd(String(x.joined).slice(0,10),x.date)-1).filter(x=>x>=0);return g.length?g.reduce((a,b)=>a+b,0)/g.length:0};
   return{k:'orders',rows:o,
@@ -526,11 +528,11 @@ function render(){if(RQ)return;RQ=requestAnimationFrame(()=>{RQ=0;renderNow()})}
 function togTheme(){const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('sptheme',t)}catch(e){}renderNow()}
 function renderNow(){
   if(canTab(tab)==='none'&&!(tab==='team'&&isSuper())){const f=NAV.find(([k])=>canTab(k)!=='none');tab=f?f[0]:'team'}
-  const nv=`<div class="logo">S</div>`+NAV.filter(([k])=>canTab(k)!=='none').concat(isSuper()?[['team','Team']]:[]).map(([k,n])=>`<button class="n ${k===tab?'on':''}" onclick="go('${k}')">${ico(k)}${n}</button>`).join('')+`<button class="kbd" onclick="openPal()">⌘K</button>`;if($('#nav').innerHTML!==nv&&renderNow.nv!==nv){$('#nav').innerHTML=nv;renderNow.nv=nv}
+  const nv=navHTML();if($('#nav').innerHTML!==nv&&renderNow.nv!==nv){$('#nav').innerHTML=nv;renderNow.nv=nv}
   const keep={};document.querySelectorAll('#app input,#app select').forEach(i=>{if(i.id&&i.type!=='file')keep[i.id]=i.value});
-  const TT={"home": "Home", "ads": "Ads", "orders": "Orders", "growth": "Growth", "wa": "WhatsApp", "content": "Content", "creatives": "Creatives", "tasks": "Tasks", "lab": "Lab", "money": "Money", "ask": "Ask", "data": "Setup", "team": "Team"};
+  const TT={"home": "Today", "ads": "Ads", "orders": "Orders", "growth": "Growth", "wa": "WhatsApp", "content": "Content", "creatives": "Creatives", "tasks": "Tasks", "lab": "Lab", "money": "Money", "ask": "Ask", "data": "Settings", "team": "People & access", "analytics": "Analytics", "areas": "Areas"};
   const topbar=`<div class="topbar"><span class="crumb">Spinoto OS / <b>${TT[tab]}</b>${canTab(tab)==='view'?' <span class="ro-badge">View only</span>':''}</span><div class="gsearch" onclick="openPal()"><span>🔍</span><span>Search or jump to…</span><kbd>⌘K</kbd></div><button class="thm" onclick="togTheme()" title="Switch light / dark">${document.documentElement.dataset.theme==='dark'?'☀️':'🌙'}</button>${userBtn()}</div>`;
-  const html=(db?'':skelHome())+topbar+({home:vHome,ads:vAds,orders:vOrders,growth:vGrowth,wa:()=>vWA(),content:vContent,creatives:vCreatives,tasks:vTasks,lab:vLab,money:vMoney,data:vData,team:()=>vTeam()}[tab]());
+  const html=(db?'':skelHome())+topbar+({home:()=>vHome2(),analytics:()=>vAnalytics(),areas:()=>vAreas(),ads:vAds,orders:vOrders,growth:vGrowth,wa:()=>vWA(),content:vContent,creatives:vCreatives,tasks:vTasks,lab:vLab,money:vMoney,data:vData,team:()=>vTeam()}[tab]());
   if(html===LASTHTML&&$('#app').childElementCount)return;LASTHTML=html;
   const ae=document.activeElement,fid=ae&&ae.id&&ae.tagName==='INPUT'?ae.id:'',cr=fid&&ae.type==='text'?ae.selectionStart:null;
   $('#app').classList.toggle('anim',renderNow.lt!==tab);renderNow.lt=tab;
@@ -539,7 +541,7 @@ function renderNow(){
   if(fid){const e=document.getElementById(fid);if(e){e.focus();if(cr!==null)try{e.setSelectionRange(cr,cr)}catch(_){}}}
   for(const id in keep){const e=document.getElementById(id);if(e&&keep[id]!=='')e.value=keep[id]}
   if(!$('#fab')){const b=document.createElement('button');b.id='fab';b.className='btn fab';document.body.appendChild(b)}
-  const F={home:['+ Quick add',()=>openPal()],content:['+ Content',()=>openForm('content')],creatives:['+ Creative',()=>openForm('creatives')],tasks:['+ Task',()=>openForm('tasks')],wa:['+ Campaign',()=>waCampForm()]}[tab]||['+ Log',()=>openLog()],fb=$('#fab');fb.textContent=F[0];fb.onclick=F[1];fb.style.display=tab==='ask'||tab==='data'||tab==='team'||canTab(tab)!=='edit'?'none':'';
+  const F={home:['+ Quick add',()=>openPal()],content:['+ Content',()=>openForm('content')],creatives:['+ Creative',()=>openForm('creatives')],wa:['+ Campaign',()=>waCampForm()]}[tab]||['+ Log',()=>openLog()],fb=$('#fab');fb.textContent=F[0];fb.onclick=F[1];fb.style.display=['home','analytics','areas','data','team'].includes(tab)||canTab(tab)!=='edit'?'none':'';
   const f=$('#imp');if(f)f.onchange=()=>f.files[0]&&doImport(f.files[0]);if($('#so'))sim($('input[type=range]').value);if(tab==='ads')hint();
   const ch=$('#ch');if(ch){const tt=$('#tt');ch.onpointermove=e=>{const r=ch.getBoundingClientRect(),n=CH.length,i=cl(Math.floor((e.clientX-r.left)/r.width*n),0,n-1),x=CH[i];tt.style.display='block';tt.innerHTML=`<b>${x.d}</b><br>${inr(x.spend)} · ${Math.round(x.inst)} installs · ${c1(x.cpi)}`;tt.style.left=cl(e.clientX-r.left-60,0,r.width-170)+'px'};ch.onpointerleave=()=>tt.style.display='none'}
   counters()}
@@ -550,7 +552,7 @@ function openLog(t){closeAll();$('#drw').innerHTML=`<div class="ov r" onclick="c
   <p class="mu" id="hint" style="min-height:20px"></p><div class="row"><button class="btn" onclick="saveEntry()">Save</button><button class="btn g" onclick="closeAll()">Done</button></div></div></div>`;hint();if(t){$('#sm').value=t;smart()}}
 function closeAll(){$('#drw').innerHTML='';$('#pal').innerHTML=''}
 function openPal(){closeAll();$('#pal').innerHTML=`<div class="ov" onclick="closeAll()"><div class="bx" onclick="event.stopPropagation()"><input class="pq" id="pq" placeholder="Jump to…, log numbers, or ask a question" oninput="palList()" onkeydown="palKey(event)"><div id="pl"></div></div></div>`;$('#pq').focus();palList()}
-function palList(){const q=val('pq'),l=q.toLowerCase(),I=[];NAV.filter(([k])=>canTab(k)!=='none').forEach(([k,n])=>{if(!l||n.toLowerCase().includes(l))I.push([`→  Go to ${n}`,()=>go(k)])});[['content','Content',()=>openForm('content')],['task','Task',()=>openForm('tasks')],['creative','Creative',()=>openForm('creatives')]].forEach(([w,n,f])=>{if(!l||('new '+w).includes(l))I.push([`+  New ${n.toLowerCase()}`,f])});
+function palList(){const q=val('pq'),l=q.toLowerCase(),I=[];NAV.filter(([k])=>canTab(k)!=='none').forEach(([k,n])=>{if(!l||n.toLowerCase().includes(l))I.push([`→  Go to ${n}`,()=>go(k)])});[['content','Content',()=>openForm('content')],['creative','Creative',()=>openForm('creatives')]].forEach(([w,n,f])=>{if(!l||('new '+w).includes(l))I.push([`+  New ${n.toLowerCase()}`,f])});
   if(!l||'log'.includes(l))I.push(['+  Log an entry',()=>openLog()]);
   if(q&&/\d/.test(q))I.unshift([`✦  Smart-log: “${q}”`,()=>openLog(q)]);PI=I;$('#pl').innerHTML=I.map((x,i)=>`<div class="pi2 ${i?'':'on'}" onclick="PI[${i}][1]()">${esc(x[0])}</div>`).join('')}
 function palKey(e){if(e.key==='Escape')closeAll();if(e.key==='Enter'&&PI[0])PI[0][1]()}

@@ -9,6 +9,7 @@ const WA_JUNK = new Set(['', 'n/a', 'na', 'n.a', 'none', 'nil', '-', '.', 'null'
 (function () { const st = document.createElement('style'); st.textContent = '.waseg{overflow-x:auto;max-width:100%}.waseg button{white-space:nowrap}.wa3{grid-template-columns:2fr 1fr auto}@media(max-width:700px){.wa3{grid-template-columns:1fr 1fr}.wa3>div:first-child{grid-column:1/-1}}'; document.head.appendChild(st) })();
 let W = { sub: 'check', camps: [], counts: {}, sum: null, opt: [], optN: 0, loaded: false, loading: false, raw: '', rows: null, filt: 'All', camp: '', date: '', logged: false, armed: '', lk: null, oq: '' };
 try { W.sub = localStorage.getItem('wasub') || 'check' } catch (e) { }
+window.W = W;
 
 const WS = () => ({ gap: 5, cap: 4, cpm: 0, cc: 91, fb: 'Customer', ...(S.settings.find(x => x.id === 'wa') || {}) });
 const waSB = () => window.SB || null;
