@@ -32,6 +32,7 @@ const roleLabel = r => (ROLES.find(x => x.role === r) || {}).label || r;
 })();
 
 function authScreen(inner) {
+  document.body.classList.add('authing');
   let a = document.getElementById('auth'); if (!a) { a = document.createElement('div'); a.id = 'auth'; document.body.appendChild(a) }
   a.innerHTML = `<div class="bx2"><div class="logo">S</div>${inner}</div>`;
 }
@@ -48,7 +49,7 @@ async function authGate(client) {
     authScreen(`<h1>No access yet</h1><p class="mu">You're signed in as <b>${esc(session.user.email)}</b>, but this account isn't active in Spinoto OS. Ask your Super Admin to add or re-activate you.</p><button class="btn g" onclick="SB.auth.signOut()">Log out</button>`);
     return false;
   }
-  ME = p.data; document.getElementById('auth')?.remove();
+  ME = p.data; document.getElementById('auth')?.remove(); document.body.classList.remove('authing');
   return true;
 }
 
