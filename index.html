@@ -341,7 +341,7 @@ function exKpis(ds,C){const B=exBuckets(C.R);
     return`<div class="kc2"><small>${m.l}</small><b>${m.fmt(v)}</b><div class="kf">${dchip(v,p,m.up)}${p!==null?`<span class="mu">${m.fmt(p)} before</span>`:''}</div>${B.length>1?spark(ser):''}</div>`}).join('')}</div>`}
 
 // --- Trend chart (click a bar to zoom into that day/week) ---
-function exTrend(ds,C){const ms=ds.tm.map(k=>ds.ms.find(m=>m.k===k)),m=ms.find(x=>x.k===EX.tm[ds.k])||ms[0],B=exBuckets(C.R);
+function exTrendOld(ds,C){const ms=ds.tm.map(k=>ds.ms.find(m=>m.k===k)),m=ms.find(x=>x.k===EX.tm[ds.k])||ms[0],B=exBuckets(C.R);
   const cur=B.map(b=>m.f(inR(C.cur,b.a,b.b),dd(b.a,b.b)));
   const prev=C.prev?B.map(b=>{const o=dd(C.R.pa,C.R.a)-1;return m.f(inR(C.prev,addDays(b.a,-o),addDays(b.b,-o)),dd(b.a,b.b))}):null;
   const W=720,H=210,pl=8,pb=24,mx=Math.max(1,...cur,...(prev||[])),bw=(W-2*pl)/B.length,y=v=>H-pb-(v/mx)*(H-pb-14);

@@ -42,14 +42,60 @@ function spendIn(a, b, M) {
   return { ...parts, total };
 }
 function ordersAll() { const d = ordDS(); return d.rows }
-function v2bars(B, rows, W = 640, H = 170) {
-  const g = B.map(b => { const r = inR(rows, b.a, b.b); return { b, t: r.filter(x => vehOf(x) === '2W').length, f: r.filter(x => vehOf(x) === '4W').length, o: r.filter(x => vehOf(x) === 'Other').length } });
-  const mx = Math.max(1, ...g.map(x => x.t + x.f + x.o)), bw = W / Math.max(1, g.length), sc = (H - 14) / mx, gap = Math.min(6, bw * .25);
-  const bars = g.map((x, i) => { const X = (i * bw + gap / 2).toFixed(1), w = Math.max(1, bw - gap).toFixed(1); let y = H; const seg = (n, cl) => { if (!n) return ''; const h = n * sc; y -= h; return `<rect x="${X}" y="${y.toFixed(1)}" width="${w}" height="${(h - .8).toFixed(1)}" rx="2" fill="${cl}"/>` };
-    return `<g class="tb" onclick="exDay('${x.b.a}','${x.b.b}')"><title>${x.b.l}: ${x.t + x.f + x.o} orders (2W ${x.t}, 4W ${x.f}${x.o ? ', other ' + x.o : ''})</title><rect x="${i * bw}" y="0" width="${bw}" height="${H}" fill="transparent"/>${seg(x.t, 'var(--ink)')}${seg(x.f, 'var(--ac)')}${seg(x.o, 'var(--bd)')}</g>` }).join('');
-  const tk = g.length < 2 ? [0] : [0, Math.floor((g.length - 1) / 2), g.length - 1];
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:170px;display:block" role="img" aria-label="Orders over time split into 2-wheeler and 4-wheeler"><line x1="0" x2="${W}" y1="${H - .5}" y2="${H - .5}" stroke="var(--bd)"/>${bars}</svg><div class="tk2">${tk.map(i => `<span>${g[i] ? g[i].b.l : ''}</span>`).join('')}</div>`;
+// ---------- CHARTS (HTML columns: capped width, 2px gaps, rounded data-ends, hover tooltips) ----------
+const niceMax = v => { if (v <= 2) return 2; if (v < 10) return Math.ceil(v / 2) * 2; const q = 2 * Math.pow(10, Math.floor(Math.log10(v)) - 1); return Math.ceil(v / q) * q };
+const cmp = v => { const a = Math.abs(v); return a >= 1e7 ? (v / 1e7).toFixed(1).replace(/\.0$/, '') + 'Cr' : a >= 1e5 ? (v / 1e5).toFixed(1).replace(/\.0$/, '') + 'L' : a >= 1e3 ? (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'K' : String(+v.toFixed(v < 10 && v % 1 ? 1 : 0)) };
+const HOURS = [[0, 6, 'Night'], [6, 9, '6–9 AM'], [9, 12, '9–12'], [12, 15, '12–3 PM'], [15, 18, '3–6'], [18, 21, '6–9 PM'], [21, 24, '9 PM+']];
+const hasHour = rows => rows.some(x => x.hour !== undefined && x.hour !== null && x.hour !== '');
+// cols: [{l, tip, segs:[{v, c}], ghost, click}], opts: {h, money}
+function colChart(cols, o = {}) {
+  const H = o.h || 180, tot = c => c.segs.reduce((s, x) => s + x.v, 0), mx = niceMax(Math.max(1e-9, ...cols.map(c => Math.max(tot(c), c.ghost || 0))));
+  const fmt = o.money ? (v => '₹' + cmp(v)) : cmp, few = cols.length <= 10;
+  const xl = cols.length <= 12 ? cols.map((c, i) => i) : [0, Math.floor((cols.length - 1) / 2), cols.length - 1];
+  const peak = cols.reduce((b, c, i) => tot(c) > tot(cols[b]) ? i : b, 0);
+  return `<div class="cc" style="--h:${H}px"><div class="cc-y">${[1, .5, 0].map(f => `<span style="bottom:${f * 100}%">${fmt(mx * f)}</span>`).join('')}</div>
+  <div class="cc-p"><div class="cc-g">${[1, .5, 0].map(f => `<i style="bottom:${f * 100}%"></i>`).join('')}</div><div class="cc-cols">${cols.map((c, i) => { const t = tot(c);
+    return `<button class="cc-c" data-tip="${esc(c.tip)}" ${c.click ? `onclick="${c.click}"` : 'tabindex="-1"'} aria-label="${esc(c.tip)}">${c.ghost ? `<span class="cc-gh" style="height:${(c.ghost / mx * 100).toFixed(2)}%"></span>` : ''}<span class="cc-s" style="height:${(t / mx * 100).toFixed(2)}%">${c.segs.filter(x => x.v > 0).map(x => `<span style="flex:${x.v};background:${x.c}"></span>`).join('')}</span>${(few || i === peak) && t > 0 ? `<b class="cc-v" style="bottom:calc(${(t / mx * 100).toFixed(2)}% + 4px)">${fmt(t)}</b>` : ''}</button>` }).join('')}</div>
+  <div class="cc-x">${cols.map((c, i) => `<span style="justify-content:${cols.length > 12 && i === 0 ? 'flex-start' : cols.length > 12 && i === cols.length - 1 ? 'flex-end' : 'center'}"><em>${xl.includes(i) ? esc(c.l) : ''}</em></span>`).join('')}</div></div></div>`;
 }
+// Big-number comparison when the period is too short to chart
+function cmpTile(label, v, p, fmt, note, up = 1) {
+  const d = v2delta(v, p, up);
+  return `<div class="cmpt"><div><small>${label}</small><b>${fmt(v)}</b>${d[0] ? `<span class="kd ${d[1]}">${d[0]}</span>` : ''}</div>${p !== null && p !== undefined ? `<div><small>Previous</small><b class="mu">${fmt(p)}</b></div>` : ''}<p>${note || 'Pick 7 days or more to see a trend.'}</p></div>`;
+}
+// Orders: 2W/4W stacked columns; hourly when the period is a single day
+function v2bars(B, rows) {
+  const seg = r => [{ v: r.filter(x => vehOf(x) === '2W').length, c: 'var(--c2w)' }, { v: r.filter(x => vehOf(x) === '4W').length, c: 'var(--c4w)' }, { v: r.filter(x => vehOf(x) === 'Other').length, c: 'var(--cot)' }];
+  const tip = (l, r) => { const s = seg(r); return `${l}: ${r.length} orders · 2W ${s[0].v} · 4W ${s[1].v}${s[2].v ? ' · other ' + s[2].v : ''}` };
+  if (B.length < 3) {
+    if (!hasHour(rows)) return cmpTile('Orders', rows.length, null, fmtN, 'Hourly split appears once orders carry a time (Sheet sync).');
+    return colChart(HOURS.map(([a, b, l]) => { const r = rows.filter(x => x.hour !== '' && x.hour != null && +x.hour >= a && +x.hour < b); return { l, tip: tip(l, r), segs: seg(r) } }), { h: 170 });
+  }
+  return colChart(B.map(b => { const r = inR(rows, b.a, b.b); return { l: b.l.replace(/^Wk of /, ''), tip: tip(b.l, r), segs: seg(r), click: `exDay('${b.a}','${b.b}')` } }), { h: 170 });
+}
+// Explore engine trend (replaces the old SVG version) — metric switcher + this period vs previous as a ghost
+function exTrend(ds, C) {
+  const ms = ds.tm.map(k => ds.ms.find(m => m.k === k)), m = ms.find(x => x.k === EX.tm[ds.k]) || ms[0], B = exBuckets(C.R);
+  const money = /₹/.test(m.fmt(1)), seg = `${ms.length > 1 ? `<div class="seg sm2">${ms.map(x => `<button class="${x === m ? 'on' : ''}" onclick="EX.tm['${ds.k}']='${x.k}';exSave();renderNow()">${x.l}</button>`).join('')}</div>` : `<span>${m.l} over time</span>`}`;
+  let body;
+  if (B.length < 3) {
+    if (hasHour(C.cur) && /^(n|ok|nw|cx)$/.test(m.k)) body = colChart(HOURS.map(([a, b, l]) => { const r = C.cur.filter(x => x.hour !== '' && x.hour != null && +x.hour >= a && +x.hour < b); const v = m.f(r, 1); return { l, tip: `${l}: ${m.fmt(v)}`, segs: [{ v, c: 'var(--c1)' }] } }), { money });
+    else body = cmpTile(m.l, m.f(C.cur, C.R.n), C.prev ? m.f(C.prev, C.R.n) : null, m.fmt, '', m.up);
+  } else {
+    const o = C.prev ? dd(C.R.pa, C.R.a) - 1 : 0;
+    body = colChart(B.map(b => { const v = m.f(inR(C.cur, b.a, b.b), dd(b.a, b.b)), p = C.prev ? m.f(inR(C.prev, addDays(b.a, -o), addDays(b.b, -o)), dd(b.a, b.b)) : null;
+      return { l: b.l.replace(/^Wk of /, ''), tip: `${b.l}: ${m.fmt(v)}${p !== null ? ' · before ' + m.fmt(p) : ''}`, segs: [{ v: Math.max(0, v || 0), c: 'var(--c1)' }], ghost: p ? Math.max(0, p) : 0, click: `exDay('${b.a}','${b.b}')` } }), { money });
+  }
+  return `<div class="c"><div class="ct">${seg}<span class="lgd"><span><i style="background:var(--c1)"></i>This period</span>${C.prev && B.length >= 3 ? '<span><i style="background:var(--ghost)"></i>Previous</span>' : ''}</span></div>${body}${B.length >= 3 ? '<div class="mu" style="font-size:12px;margin-top:8px">Hover a column for numbers · tap to zoom into it.</div>' : ''}</div>`;
+}
+// one floating tooltip for every [data-tip]
+(function () {
+  let tip; const show = (el, x, y) => { if (!tip) { tip = document.createElement('div'); tip.id = 'vtip'; document.body.appendChild(tip) } tip.textContent = el.getAttribute('data-tip'); tip.style.display = 'block'; const w = tip.offsetWidth; tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, x - w / 2)) + 'px'; tip.style.top = Math.max(8, y - tip.offsetHeight - 14) + 'px' };
+  const hide = () => { if (tip) tip.style.display = 'none' };
+  addEventListener('pointermove', e => { const el = e.target.closest && e.target.closest('[data-tip]'); el ? show(el, e.clientX, e.clientY) : hide() }, { passive: true });
+  addEventListener('focusin', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el) { const r = el.getBoundingClientRect(); show(el, r.left + r.width / 2, r.top) } });
+  addEventListener('scroll', hide, { passive: true });
+})();
 const topN = (rows, f, n) => { const c = {}; rows.forEach(r => { const k = f(r); if (k && k !== '—') c[k] = (c[k] || 0) + 1 }); return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, n) };
 
 // ---------- ORDER STATUS ----------
@@ -115,7 +161,7 @@ function vHome2() {
     <div class="row" style="margin:0"><div class="pseg">${seg.map(([k, l]) => `<button class="${EX.per === k ? 'on' : ''}" onclick="exPer('${k}')">${l}</button>`).join('')}</div>${canTab('ads') === 'edit' ? '<button class="btn" onclick="openLog()">+ Log ads</button>' : ''}</div></div>
   <h2 class="sec">The numbers <span>· vs the previous ${R.n} day${R.n > 1 ? 's' : ''}</span></h2><div class="kpis">${kpis}</div>
   <div class="row2">
-    <section class="c f3"><div class="hd"><h2>Orders by ${R.n > 62 ? 'week' : 'day'}</h2><span class="lgd"><span><i class="c2w"></i>2-wheeler</span><span><i class="c4w"></i>4-wheeler</span></span></div>
+    <section class="c f3"><div class="hd"><h2>Orders by ${R.n === 1 ? 'time of day' : R.n > 62 ? 'week' : 'day'}</h2><span class="lgd"><span><i class="c2w"></i>2-wheeler</span><span><i class="c4w"></i>4-wheeler</span></span></div>
       <div class="stt"><div><small>2-wheeler</small><b>${n2} <span>${Math.round(n2 / tot * 100)}%</span></b></div><div><small>4-wheeler</small><b>${n4} <span>${Math.round(n4 / tot * 100)}%</span></b></div>${bi + bs ? `<div><small>Instant : scheduled</small><b>${Math.round(bi / (bi + bs) * 100)} : ${Math.round(bs / (bi + bs) * 100)}</b></div>` : ''}${day ? `<div><small>Busiest day</small><b>${day}</b></div>` : ''}</div>
       ${cur.length ? v2bars(exBuckets(R), cur) : '<div class="empty">No orders in this period.</div>'}</section>
     <section class="c f2" style="display:flex;flex-direction:column"><div class="hd"><h2>Top areas</h2><button class="lnk" onclick="go('areas')">All ${allAreas} areas →</button></div>
