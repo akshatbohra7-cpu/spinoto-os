@@ -45,7 +45,7 @@ function ordersAll() { const d = ordDS(); return d.rows }
 // ---------- CHARTS (HTML columns: capped width, 2px gaps, rounded data-ends, hover tooltips) ----------
 const niceMax = v => { if (v <= 2) return 2; if (v < 10) return Math.ceil(v / 2) * 2; const q = 2 * Math.pow(10, Math.floor(Math.log10(v)) - 1); return Math.ceil(v / q) * q };
 const cmp = v => { const a = Math.abs(v); return a >= 1e7 ? (v / 1e7).toFixed(1).replace(/\.0$/, '') + 'Cr' : a >= 1e5 ? (v / 1e5).toFixed(1).replace(/\.0$/, '') + 'L' : a >= 1e3 ? (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'K' : String(+v.toFixed(v < 10 && v % 1 ? 1 : 0)) };
-const HOURS = [[0, 6, 'Night'], [6, 9, '6–9 AM'], [9, 12, '9–12'], [12, 15, '12–3 PM'], [15, 18, '3–6'], [18, 21, '6–9 PM'], [21, 24, '9 PM+']];
+const HOURS = [[0, 6, 'Night'], [6, 9, '6–9 AM'], [9, 12, '9 AM–12'], [12, 15, '12–3 PM'], [15, 18, '3–6 PM'], [18, 21, '6–9 PM'], [21, 24, '9 PM+']];
 const hasHour = rows => rows.some(x => x.hour !== undefined && x.hour !== null && x.hour !== '');
 // cols: [{l, tip, segs:[{v, c}], ghost, click}], opts: {h, money}
 function colChart(cols, o = {}) {
@@ -106,12 +106,34 @@ function v2bars(B, rows) {
   return story(`Busiest ${u}: <b>${SB[bi].l}</b> with <b>${tots[bi]}</b> orders.${SB.length > 1 && u !== 'day' ? ` Each bar is one ${u} — tap it to see its days.` : ''}`) +
     colChart(SB.map(b => { const r = inR(rows, b.a, b.b); return { l: b.l, tip: tip(b.l, r) + (b.part ? ` (only ${dd(b.a, b.b)} day${dd(b.a, b.b) > 1 ? 's' : ''})` : ''), segs: seg(r), part: b.part, click: `exDay('${b.a}','${b.b}')` } }), { h: 170 }) + partNote(SB);
 }
+// ---- time-of-day view (any period) ----
+let OV = 'slot'; try { OV = localStorage.getItem('ordview') || 'slot' } catch (e) { }
+const setOV = v => { OV = v; try { localStorage.setItem('ordview', v) } catch (e) { } renderNow() };
+const ovSeg = () => `<div class="seg sm2"><button class="${OV === 'slot' ? 'on' : ''}" onclick="setOV('slot')">Time of day</button><button class="${OV === 'time' ? 'on' : ''}" onclick="setOV('time')">Over time</button></div>`;
+const inSlot = (x, a, b) => x.hour !== '' && x.hour != null && +x.hour >= a && +x.hour < b;
+function slotStory(rows, n, f) {
+  const t = rows.filter(x => x.hour !== '' && x.hour != null), tot = f ? f(t) : t.length; if (!tot) return '';
+  const c = HOURS.map(([a, b, l]) => { const r = t.filter(x => inSlot(x, a, b)); return [l, f ? f(r) : r.length] }).sort((p, q) => q[1] - p[1]);
+  const top2 = c[0][1] + c[1][1], low = c.filter(x => x[1] > 0).pop();
+  return story(`Most orders come in <b>${c[0][0]}</b> (${Math.round(c[0][1] / tot * 100)}%), then <b>${c[1][0]}</b> (${Math.round(c[1][1] / tot * 100)}%) — together ${Math.round(top2 / tot * 100)}% of the ${n > 1 ? n + ' days' : 'day'}.${low && low[0] !== c[0][0] ? ` Quietest: ${low[0]}.` : ''}${n > 1 ? ` On a typical day that's about <b>${(c[0][1] / n).toFixed(1)}</b> orders in ${c[0][0]}.` : ''}`);
+}
+function slotBars(rows, n) {
+  if (!hasHour(rows)) return '<div class="empty">Time slots appear once orders carry a time (they come in with the Google Sheet sync).</div>';
+  const seg = r => [{ v: r.filter(x => vehOf(x) === '2W').length, c: 'var(--c2w)' }, { v: r.filter(x => vehOf(x) === '4W').length, c: 'var(--c4w)' }, { v: r.filter(x => vehOf(x) === 'Other').length, c: 'var(--cot)' }];
+  const tot = rows.filter(x => x.hour !== '' && x.hour != null).length || 1;
+  return slotStory(rows, n) + colChart(HOURS.map(([a, b, l]) => { const r = rows.filter(x => inSlot(x, a, b)), s = seg(r); return { l, tip: `${l}: ${r.length} orders (${Math.round(r.length / tot * 100)}%) · 2W ${s[0].v} · 4W ${s[1].v}${n > 1 ? ' · ' + (r.length / n).toFixed(1) + ' a day' : ''}`, segs: s } }), { h: 170 });
+}
 // Explore engine trend (replaces the old SVG version) — metric switcher + this period vs previous as a ghost
 function exTrend(ds, C) {
   const ms = ds.tm.map(k => ds.ms.find(m => m.k === k)), m = ms.find(x => x.k === EX.tm[ds.k]) || ms[0], B = exBuckets(C.R);
   const money = /₹/.test(m.fmt(1)), seg = `${ms.length > 1 ? `<div class="seg sm2">${ms.map(x => `<button class="${x === m ? 'on' : ''}" onclick="EX.tm['${ds.k}']='${x.k}';exSave();renderNow()">${x.l}</button>`).join('')}</div>` : `<span>${m.l} over time</span>`}`;
   let body, head = '', line = false;
-  if (B.length < 3) {
+  const slotOK = hasHour(C.cur) && /^(n|ok|nw|cx)$/.test(m.k) && B.length >= 3;
+  if (slotOK && OV === 'slot') {
+    const tot = m.f(C.cur, C.R.n) || 1;
+    head = slotStory(C.cur, C.R.n, r => m.f(r, C.R.n));
+    body = colChart(HOURS.map(([a, b, l]) => { const r = C.cur.filter(x => inSlot(x, a, b)), v = m.f(r, C.R.n); return { l, tip: `${l}: ${m.fmt(v)} (${Math.round(v / tot * 100)}%) · ${(v / C.R.n).toFixed(1)} a day`, segs: [{ v, c: 'var(--c1)' }] } }), { money });
+  } else if (B.length < 3) {
     if (hasHour(C.cur) && /^(n|ok|nw|cx)$/.test(m.k)) body = colChart(HOURS.map(([a, b, l]) => { const r = C.cur.filter(x => x.hour !== '' && x.hour != null && +x.hour >= a && +x.hour < b); const v = m.f(r, 1); return { l, tip: `${l}: ${m.fmt(v)}`, segs: [{ v, c: 'var(--c1)' }] } }), { money });
     else body = cmpTile(m.l, m.f(C.cur, C.R.n), C.prev ? m.f(C.prev, C.R.n) : null, m.fmt, '', m.up);
   } else {
@@ -124,7 +146,7 @@ function exTrend(ds, C) {
     head = story(`${add ? '' : 'Overall '}<b>${m.fmt(tot)}</b> ${add ? m.l.toLowerCase() : m.l.toLowerCase().replace(/^./, c => c)}${add ? '' : ''}${perDay}${vs}.${bi >= 0 && SB.length > 1 ? ` ${lowGood ? 'Best' : m.up === 2 ? 'Highest' : 'Best'} ${u}: <b>${SB[bi].l}</b> (${m.fmt(vals[bi])}).` : ''}`);
     body = colChart(SB.map((b, i) => ({ l: b.l, tip: `${b.l}: ${m.fmt(vals[i])}${prev ? ' · same ' + u + ' before: ' + m.fmt(prev[i]) : ''}${b.part ? ` (only ${dd(b.a, b.b)} day${dd(b.a, b.b) > 1 ? 's' : ''})` : ''}`, segs: [{ v: Math.max(0, vals[i]), c: 'var(--c1)' }], part: b.part, click: `exDay('${b.a}','${b.b}')` })), { money, fmtv: m.fmt }) + partNote(SB);
   }
-  return `<div class="c"><div class="ct">${seg}</div>${head}${body}${B.length >= 3 ? '<div class="mu" style="font-size:12px;margin-top:8px">Tap a bar to see it in detail.</div>' : ''}</div>`;
+  return `<div class="c"><div class="ct">${seg}${slotOK ? ovSeg() : ''}</div>${head}${body}${B.length >= 3 && !(slotOK && OV === 'slot') ? '<div class="mu" style="font-size:12px;margin-top:8px">Tap a bar to see it in detail.</div>' : ''}</div>`;
 }
 // one floating tooltip for every [data-tip]
 (function () {
@@ -199,9 +221,9 @@ function vHome2() {
     <div class="row" style="margin:0"><div class="pseg">${seg.map(([k, l]) => `<button class="${EX.per === k ? 'on' : ''}" onclick="exPer('${k}')">${l}</button>`).join('')}</div>${canTab('ads') === 'edit' ? '<button class="btn" onclick="openLog()">+ Log ads</button>' : ''}</div></div>
   <h2 class="sec">The numbers <span>· vs the previous ${R.n} day${R.n > 1 ? 's' : ''}</span></h2><div class="kpis">${kpis}</div>
   <div class="row2">
-    <section class="c f3"><div class="hd"><h2>Orders by ${R.n === 1 ? 'time of day' : R.n <= 14 ? 'day' : R.n <= 62 ? 'week' : 'month'}</h2><span class="lgd"><span><i class="c2w"></i>2-wheeler</span><span><i class="c4w"></i>4-wheeler</span></span></div>
+    <section class="c f3"><div class="hd"><h2>Orders by ${R.n === 1 || OV === 'slot' ? 'time of day' : R.n <= 14 ? 'day' : R.n <= 62 ? 'week' : 'month'}</h2>${R.n > 1 ? ovSeg() : ''}</div><div class="lgd" style="margin:-2px 0 8px"><span><i class="c2w"></i>2-wheeler</span><span><i class="c4w"></i>4-wheeler</span></div>
       <div class="stt"><div><small>2-wheeler</small><b>${n2} <span>${Math.round(n2 / tot * 100)}%</span></b></div><div><small>4-wheeler</small><b>${n4} <span>${Math.round(n4 / tot * 100)}%</span></b></div>${bi + bs ? `<div><small>Instant : scheduled</small><b>${Math.round(bi / (bi + bs) * 100)} : ${Math.round(bs / (bi + bs) * 100)}</b></div>` : ''}${day ? `<div><small>Busiest day</small><b>${day}</b></div>` : ''}</div>
-      ${cur.length ? v2bars(exBuckets(R), cur) : '<div class="empty">No orders in this period.</div>'}</section>
+      ${!cur.length ? '<div class="empty">No orders in this period.</div>' : R.n > 1 && OV === 'slot' ? slotBars(cur, R.n) : v2bars(exBuckets(R), cur)}</section>
     <section class="c f2" style="display:flex;flex-direction:column"><div class="hd"><h2>Top areas</h2><button class="lnk" onclick="go('areas')">All ${allAreas} areas →</button></div>
       ${ta.slice(0, 6).map(([a, o], i) => `<button class="lr" style="grid-template-columns:18px minmax(0,1fr) 96px 34px" onclick="AR.q='${esc(a).replace(/'/g, '')}';go('areas')"><span class="mono mu" style="font-size:12px">${i + 1}</span><span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a)}</span><span class="sbar"><span class="c2w" style="width:${(o.t / amx * 100).toFixed(0)}%"></span><span class="c4w" style="width:${(o.f / amx * 100).toFixed(0)}%"></span></span><b class="mono" style="text-align:right">${o.n}</b></button>`).join('') || '<div class="empty">No areas on orders in this period.</div>'}
       <div class="mu" style="margin-top:auto;padding-top:10px;font-size:12px">Bar shows the 2W / 4W split${growA}</div></section>
