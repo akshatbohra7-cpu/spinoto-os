@@ -49,13 +49,13 @@ const HOURS = [[0, 6, 'Night'], [6, 9, '6–9 AM'], [9, 12, '9–12'], [12, 15, 
 const hasHour = rows => rows.some(x => x.hour !== undefined && x.hour !== null && x.hour !== '');
 // cols: [{l, tip, segs:[{v, c}], ghost, click}], opts: {h, money}
 function colChart(cols, o = {}) {
-  const H = o.h || 180, tot = c => c.segs.reduce((s, x) => s + x.v, 0), mx = niceMax(Math.max(1e-9, ...cols.map(c => Math.max(tot(c), c.ghost || 0))));
-  const fmt = o.money ? (v => '₹' + cmp(v)) : cmp, few = cols.length <= 10;
+  const H = o.h || 180, tot = c => c.segs.reduce((s, x) => s + x.v, 0), mx = niceMax(Math.max(1e-9, ...cols.map(c => Math.max(tot(c), c.ghost || 0))) * 1.12);
+  const fmt = o.money ? (v => '₹' + cmp(v)) : cmp, vf = o.fmtv ? (v => { const t = o.fmtv(v); return t.length > 7 ? fmt(v) : t }) : fmt, few = cols.length <= 14;
   const xl = cols.length <= 12 ? cols.map((c, i) => i) : [0, Math.floor((cols.length - 1) / 2), cols.length - 1];
   const peak = cols.reduce((b, c, i) => tot(c) > tot(cols[b]) ? i : b, 0);
-  return `<div class="cc" style="--h:${H}px"><div class="cc-y">${[1, .5, 0].map(f => `<span style="bottom:${f * 100}%">${fmt(mx * f)}</span>`).join('')}</div>
+  return `<div class="cc" style="--h:${H}px;--bw:${cols.length <= 6 ? 44 : cols.length <= 10 ? 32 : 24}px"><div class="cc-y">${[1, .5, 0].map(f => `<span style="bottom:${f * 100}%">${fmt(mx * f)}</span>`).join('')}</div>
   <div class="cc-p"><div class="cc-g">${[1, .5, 0].map(f => `<i style="bottom:${f * 100}%"></i>`).join('')}</div><div class="cc-cols">${cols.map((c, i) => { const t = tot(c);
-    return `<button class="cc-c" data-tip="${esc(c.tip)}" ${c.click ? `onclick="${c.click}"` : 'tabindex="-1"'} aria-label="${esc(c.tip)}">${c.ghost ? `<span class="cc-gh" style="height:${(c.ghost / mx * 100).toFixed(2)}%"></span>` : ''}<span class="cc-s" style="height:${(t / mx * 100).toFixed(2)}%">${c.segs.filter(x => x.v > 0).map(x => `<span style="flex:${x.v};background:${x.c}"></span>`).join('')}</span>${(few || i === peak) && t > 0 ? `<b class="cc-v" style="bottom:calc(${(t / mx * 100).toFixed(2)}% + 4px)">${fmt(t)}</b>` : ''}</button>` }).join('')}</div>
+    return `<button class="cc-c" data-tip="${esc(c.tip)}" ${c.click ? `onclick="${c.click}"` : 'tabindex="-1"'} aria-label="${esc(c.tip)}">${c.ghost ? `<span class="cc-gh" style="height:${(c.ghost / mx * 100).toFixed(2)}%"></span>` : ''}<span class="cc-s${c.part ? ' part' : ''}" style="height:${(t / mx * 100).toFixed(2)}%">${c.segs.filter(x => x.v > 0).map(x => `<span style="flex:${x.v};background:${x.c}"></span>`).join('')}</span>${(few || i === peak) && t > 0 ? `<b class="cc-v" style="bottom:calc(${(t / mx * 100).toFixed(2)}% + 4px)">${vf(t)}</b>` : ''}</button>` }).join('')}</div>
   <div class="cc-x">${cols.map((c, i) => `<span style="justify-content:${cols.length > 12 && i === 0 ? 'flex-start' : cols.length > 12 && i === cols.length - 1 ? 'flex-end' : 'center'}"><em>${xl.includes(i) ? esc(c.l) : ''}</em></span>`).join('')}</div></div></div>`;
 }
 // Big-number comparison when the period is too short to chart
@@ -82,6 +82,17 @@ function lineChart(series, o) {
   <div class="cc-x">${o.labels.map((l, i) => `<span style="justify-content:${n > 8 && i === 0 ? 'flex-start' : n > 8 && i === n - 1 ? 'flex-end' : 'center'}"><em>${xl.includes(i) ? esc(l) : ''}</em></span>`).join('')}</div></div></div>`;
 }
 const strip = items => `<div class="lc-strip">${items.filter(Boolean).map(([k, v, cls]) => `<div><small>${k}</small><b class="${cls || ''}">${v}</b></div>`).join('')}</div>`;
+// Few, readable buckets: ≤14 days → days · ≤62 days → weeks · longer → months
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function simpleBuckets(R) {
+  const out = [], dl = d => +d.slice(8) + ' ' + MON[+d.slice(5, 7) - 1];
+  if (R.n <= 14) { for (let i = 0; i < R.n; i++) { const d = addDays(R.a, i); out.push({ a: d, b: d, l: dl(d), unit: 'day' }) } return out }
+  if (R.n <= 62) { for (let d = R.a; d <= R.b; d = addDays(d, 7)) { const e = addDays(d, 6) > R.b ? R.b : addDays(d, 6); out.push({ a: d, b: e, l: d.slice(5, 7) === e.slice(5, 7) ? `${+d.slice(8)}–${dl(e)}` : `${dl(d)}–${dl(e)}`, unit: 'week', part: dd(d, e) < 7 }) } return out }
+  let d = R.a; while (d <= R.b) { const m = d.slice(0, 7), nx = iso(new Date(+m.slice(0, 4), +m.slice(5), 1)), e = addDays(nx, -1) > R.b ? R.b : addDays(nx, -1); out.push({ a: d, b: e, l: MON[+m.slice(5) - 1] + (R.n > 370 ? " '" + m.slice(2, 4) : ''), unit: 'month', part: dd(d, e) < new Date(+m.slice(0, 4), +m.slice(5), 0).getDate() }); d = nx }
+  return out;
+}
+const story = t => `<p class="story">${t}</p>`;
+const partNote = SB => { const p = SB.filter(b => b.part); return p.length ? `<div class="mu" style="font-size:12px;margin-top:6px"><span class="pswatch"></span>Lighter bar${p.length > 1 ? 's' : ''} = not a full ${SB[0].unit} (${p.map(b => b.l + ': ' + dd(b.a, b.b) + ' day' + (dd(b.a, b.b) > 1 ? 's' : '')).join(', ')}), so ${p.length > 1 ? 'they look' : 'it looks'} smaller.</div>` : '' };
 // Orders: 2W/4W stacked columns; hourly when the period is a single day
 function v2bars(B, rows) {
   const seg = r => [{ v: r.filter(x => vehOf(x) === '2W').length, c: 'var(--c2w)' }, { v: r.filter(x => vehOf(x) === '4W').length, c: 'var(--c4w)' }, { v: r.filter(x => vehOf(x) === 'Other').length, c: 'var(--cot)' }];
@@ -90,12 +101,10 @@ function v2bars(B, rows) {
     if (!hasHour(rows)) return cmpTile('Orders', rows.length, null, fmtN, 'Hourly split appears once orders carry a time (Sheet sync).');
     return colChart(HOURS.map(([a, b, l]) => { const r = rows.filter(x => x.hour !== '' && x.hour != null && +x.hour >= a && +x.hour < b); return { l, tip: tip(l, r), segs: seg(r) } }), { h: 170 });
   }
-  if (B.length > 14) {
-    const R2 = B.map(b => inR(rows, b.a, b.b)), t2 = R2.map(r => r.filter(x => vehOf(x) === '2W').length), t4 = R2.map(r => r.filter(x => vehOf(x) === '4W').length), tot = R2.map(r => r.length);
-    const bi = tot.indexOf(Math.max(...tot));
-    return lineChart([{ name: '2W', color: 'var(--c2w)', vals: t2 }, { name: '4W', color: 'var(--c4w)', vals: t4 }], { h: 170, labels: B.map(b => b.l.replace(/^Wk of /, '')), tips: B.map((b, i) => tip(b.l, R2[i])), clicks: B.map(b => `exDay('${b.a}','${b.b}')`), marks: [{ i: bi, s: t2[bi] >= t4[bi] ? 0 : 1, text: `Busiest: ${B[bi].l.replace(/^Wk of /, '')} · ${tot[bi]}` }] });
-  }
-  return colChart(B.map(b => { const r = inR(rows, b.a, b.b); return { l: b.l.replace(/^Wk of /, ''), tip: tip(b.l, r), segs: seg(r), click: `exDay('${b.a}','${b.b}')` } }), { h: 170 });
+  const R = { a: B[0].a, b: B[B.length - 1].b }; R.n = dd(R.a, R.b); const SB = simpleBuckets(R);
+  const tots = SB.map(b => inR(rows, b.a, b.b).length), bi = tots.indexOf(Math.max(...tots)), u = SB[0].unit;
+  return story(`Busiest ${u}: <b>${SB[bi].l}</b> with <b>${tots[bi]}</b> orders.${SB.length > 1 && u !== 'day' ? ` Each bar is one ${u} — tap it to see its days.` : ''}`) +
+    colChart(SB.map(b => { const r = inR(rows, b.a, b.b); return { l: b.l, tip: tip(b.l, r) + (b.part ? ` (only ${dd(b.a, b.b)} day${dd(b.a, b.b) > 1 ? 's' : ''})` : ''), segs: seg(r), part: b.part, click: `exDay('${b.a}','${b.b}')` } }), { h: 170 }) + partNote(SB);
 }
 // Explore engine trend (replaces the old SVG version) — metric switcher + this period vs previous as a ghost
 function exTrend(ds, C) {
@@ -105,23 +114,17 @@ function exTrend(ds, C) {
   if (B.length < 3) {
     if (hasHour(C.cur) && /^(n|ok|nw|cx)$/.test(m.k)) body = colChart(HOURS.map(([a, b, l]) => { const r = C.cur.filter(x => x.hour !== '' && x.hour != null && +x.hour >= a && +x.hour < b); const v = m.f(r, 1); return { l, tip: `${l}: ${m.fmt(v)}`, segs: [{ v, c: 'var(--c1)' }] } }), { money });
     else body = cmpTile(m.l, m.f(C.cur, C.R.n), C.prev ? m.f(C.prev, C.R.n) : null, m.fmt, '', m.up);
-  } else if (B.length > 14) {
-    const o = C.prev ? dd(C.R.pa, C.R.a) - 1 : 0, L = B.map(b => b.l.replace(/^Wk of /, ''));
-    const vals = B.map(b => m.f(inR(C.cur, b.a, b.b), dd(b.a, b.b)) || 0), prev = C.prev ? B.map(b => m.f(inR(C.prev, addDays(b.a, -o), addDays(b.b, -o)), dd(b.a, b.b)) || 0) : null;
-    const tot = m.f(C.cur, C.R.n), add = Math.abs(vals.reduce((a, b) => a + b, 0) - tot) <= Math.max(.5, Math.abs(tot) * .01), avg = add ? tot / vals.length : tot;
-    const hiGood = m.up !== 0, hi = vals.indexOf(Math.max(...vals)), lo = vals.indexOf(Math.min(...vals)), best = hiGood ? hi : lo, worst = hiGood ? lo : hi, unit = B[0].a === B[0].b ? 'day' : 'week';
-    const pv = C.prev ? m.f(C.prev, C.R.n) : null, d = v2delta(tot, pv, m.up);
-    const words = m.up === 2 ? ['Highest', 'Lowest'] : ['Best', 'Worst'];
-    head = strip([[add ? 'Total' : 'Overall', m.fmt(tot)], [add ? 'Average / ' + unit : 'Typical ' + unit, m.fmt(avg)], [words[0] + ' ' + unit, `${L[m.up === 2 ? hi : best]} · ${m.fmt(vals[m.up === 2 ? hi : best])}`], [words[1] + ' ' + unit, `${L[m.up === 2 ? lo : worst]} · ${m.fmt(vals[m.up === 2 ? lo : worst])}`], pv !== null ? ['vs previous', d[0] || '● flat', 'kd ' + d[1]] : null]);
-    body = lineChart([...(prev ? [{ name: 'Previous', color: 'var(--mu)', vals: prev, dash: true }] : []), { name: 'This period', color: 'var(--c1)', vals, area: true }], { money, labels: L, tips: B.map((b, i) => `${b.l}: ${m.fmt(vals[i])}${prev ? ' · before ' + m.fmt(prev[i]) : ''}`), clicks: B.map(b => `exDay('${b.a}','${b.b}')`), avg, avgLabel: (add ? 'avg ' : '') + m.fmt(avg), marks: [{ i: m.up === 2 ? hi : best, s: prev ? 1 : 0, text: m.fmt(vals[m.up === 2 ? hi : best]) }] });
-    line = true;
   } else {
-    const o = C.prev ? dd(C.R.pa, C.R.a) - 1 : 0;
-    body = colChart(B.map(b => { const v = m.f(inR(C.cur, b.a, b.b), dd(b.a, b.b)), p = C.prev ? m.f(inR(C.prev, addDays(b.a, -o), addDays(b.b, -o)), dd(b.a, b.b)) : null;
-      return { l: b.l.replace(/^Wk of /, ''), tip: `${b.l}: ${m.fmt(v)}${p !== null ? ' · before ' + m.fmt(p) : ''}`, segs: [{ v: Math.max(0, v || 0), c: 'var(--c1)' }], ghost: p ? Math.max(0, p) : 0, click: `exDay('${b.a}','${b.b}')` } }), { money });
+    const SB = simpleBuckets(C.R), u = SB[0].unit, o = C.prev ? dd(C.R.pa, C.R.a) - 1 : 0;
+    const vals = SB.map(b => m.f(inR(C.cur, b.a, b.b), dd(b.a, b.b)) || 0), prev = C.prev ? SB.map(b => m.f(inR(C.prev, addDays(b.a, -o), addDays(b.b, -o)), dd(b.a, b.b)) || 0) : null;
+    const tot = m.f(C.cur, C.R.n), add = Math.abs(vals.reduce((a, b) => a + b, 0) - tot) <= Math.max(.5, Math.abs(tot) * .01);
+    const pv = C.prev ? m.f(C.prev, C.R.n) : null, d = v2delta(tot, pv, m.up), lowGood = m.up === 0, bi = vals.indexOf(lowGood ? Math.min(...vals.filter(v => v > 0).concat([Infinity]).slice(0, -0 || undefined)) : Math.max(...vals));
+    const perDay = add && C.R.n > 1 ? ` — about <b>${m.fmt(tot / C.R.n)}</b> a day` : '';
+    const vs = pv !== null && d[0] ? `, <span class="kd ${d[1]}">${d[0].replace('▲', 'up').replace('▼', 'down')}</span> vs the previous ${C.R.n} days (${m.fmt(pv)})` : '';
+    head = story(`${add ? '' : 'Overall '}<b>${m.fmt(tot)}</b> ${add ? m.l.toLowerCase() : m.l.toLowerCase().replace(/^./, c => c)}${add ? '' : ''}${perDay}${vs}.${bi >= 0 && SB.length > 1 ? ` ${lowGood ? 'Best' : m.up === 2 ? 'Highest' : 'Best'} ${u}: <b>${SB[bi].l}</b> (${m.fmt(vals[bi])}).` : ''}`);
+    body = colChart(SB.map((b, i) => ({ l: b.l, tip: `${b.l}: ${m.fmt(vals[i])}${prev ? ' · same ' + u + ' before: ' + m.fmt(prev[i]) : ''}${b.part ? ` (only ${dd(b.a, b.b)} day${dd(b.a, b.b) > 1 ? 's' : ''})` : ''}`, segs: [{ v: Math.max(0, vals[i]), c: 'var(--c1)' }], part: b.part, click: `exDay('${b.a}','${b.b}')` })), { money, fmtv: m.fmt }) + partNote(SB);
   }
-  const lg = line ? `<span><i class="ln" style="background:var(--c1)"></i>This period</span>${C.prev ? '<span><i class="ln dash"></i>Previous</span>' : ''}` : `<span><i style="background:var(--c1)"></i>This period</span>${C.prev && B.length >= 3 ? '<span><i style="background:var(--ghost)"></i>Previous</span>' : ''}`;
-  return `<div class="c"><div class="ct">${seg}<span class="lgd">${lg}</span></div>${head}${body}${B.length >= 3 ? `<div class="mu" style="font-size:12px;margin-top:8px">Hover the chart for each ${B[0].a === B[0].b ? 'day' : 'week'} · tap to zoom in.</div>` : ''}</div>`;
+  return `<div class="c"><div class="ct">${seg}</div>${head}${body}${B.length >= 3 ? '<div class="mu" style="font-size:12px;margin-top:8px">Tap a bar to see it in detail.</div>' : ''}</div>`;
 }
 // one floating tooltip for every [data-tip]
 (function () {
@@ -196,7 +199,7 @@ function vHome2() {
     <div class="row" style="margin:0"><div class="pseg">${seg.map(([k, l]) => `<button class="${EX.per === k ? 'on' : ''}" onclick="exPer('${k}')">${l}</button>`).join('')}</div>${canTab('ads') === 'edit' ? '<button class="btn" onclick="openLog()">+ Log ads</button>' : ''}</div></div>
   <h2 class="sec">The numbers <span>· vs the previous ${R.n} day${R.n > 1 ? 's' : ''}</span></h2><div class="kpis">${kpis}</div>
   <div class="row2">
-    <section class="c f3"><div class="hd"><h2>Orders by ${R.n === 1 ? 'time of day' : R.n > 62 ? 'week' : 'day'}</h2><span class="lgd"><span><i class="c2w ${R.n > 14 && R.n <= 62 ? 'ln' : ''}"></i>2-wheeler</span><span><i class="c4w ${R.n > 14 && R.n <= 62 ? 'ln' : ''}"></i>4-wheeler</span></span></div>
+    <section class="c f3"><div class="hd"><h2>Orders by ${R.n === 1 ? 'time of day' : R.n <= 14 ? 'day' : R.n <= 62 ? 'week' : 'month'}</h2><span class="lgd"><span><i class="c2w"></i>2-wheeler</span><span><i class="c4w"></i>4-wheeler</span></span></div>
       <div class="stt"><div><small>2-wheeler</small><b>${n2} <span>${Math.round(n2 / tot * 100)}%</span></b></div><div><small>4-wheeler</small><b>${n4} <span>${Math.round(n4 / tot * 100)}%</span></b></div>${bi + bs ? `<div><small>Instant : scheduled</small><b>${Math.round(bi / (bi + bs) * 100)} : ${Math.round(bs / (bi + bs) * 100)}</b></div>` : ''}${day ? `<div><small>Busiest day</small><b>${day}</b></div>` : ''}</div>
       ${cur.length ? v2bars(exBuckets(R), cur) : '<div class="empty">No orders in this period.</div>'}</section>
     <section class="c f2" style="display:flex;flex-direction:column"><div class="hd"><h2>Top areas</h2><button class="lnk" onclick="go('areas')">All ${allAreas} areas →</button></div>
