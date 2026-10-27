@@ -160,7 +160,7 @@ async function waCheck() {
 const waSafe = () => (W.rows || []).filter(r => WA_SAFE[r.st]);
 function waUpload() {
   const cfg = WS(), c = W.camps.find(x => x.id === W.camp), csvq = s => /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  const data = 'Customer Name,Phone Number,Country Code\n' + waSafe().map(r => [csvq(r.name || cfg.fb), r.phone, cfg.cc].join(',')).join('\n');
+  const data = 'name,Phone Number,Country Code\n' + waSafe().map(r => [csvq(r.name || ''), r.phone, cfg.cc].join(',')).join('\n');
   window.SpinotoRuntime.browserDownload({ filename: `upload_${slug(c?.name || 'whatsapp')}_${W.date || today()}.csv`, data });
 }
 async function waCopy() { try { await navigator.clipboard.writeText(waSafe().map(r => r.phone).join('\n')); msg('Copied ' + waSafe().length + ' numbers') } catch (e) { msg('Copy blocked by browser — use the upload file') } }
@@ -283,12 +283,11 @@ function waVSet() {
     ${I('cap', 'Max messages per 30 days', 'number', 'Blocks a number that already got this many in 30 days.')}
     ${I('cpm', 'Cost per message ₹', 'number', 'Your BSP rate — drives spend and ROAS.')}
     ${I('cc', 'Country code', 'number', 'Filled in the upload file.')}
-    ${I('fb', 'Name if blank', 'text', 'Used in the upload file for {{name}}.')}
     <button class="btn" style="align-self:center" onclick="waSetSave()">Save settings</button></div>
   <h3>Backup</h3><div class="c"><p class="mu" style="margin-top:0">Everything is stored in your Supabase database — separate from the app, so nothing is lost if the site goes down. Download a full Excel copy anytime (good habit: once a week).</p>
   <button class="btn" onclick="waBackup()">⬇ Download full backup (Excel)</button></div>`;
 }
-async function waSetSave() { const g = k => $('#ws_' + k).value.trim(); if (await put('settings', 'wa', { gap: +g('gap') || 0, cap: +g('cap') || 99, cpm: +g('cpm') || 0, cc: +g('cc') || 91, fb: g('fb') || 'Customer' })) msg('Settings saved ✓') }
+async function waSetSave() { const g = k => $('#ws_' + k).value.trim(); if (await put('settings', 'wa', { gap: +g('gap') || 0, cap: +g('cap') || 99, cpm: +g('cpm') || 0, cc: +g('cc') || 91 })) msg('Settings saved ✓') }
 async function waBackup() {
   try {
     msg('Preparing backup…');
