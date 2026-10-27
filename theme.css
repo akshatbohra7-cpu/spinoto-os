@@ -136,3 +136,15 @@ body.authing{min-height:100dvh;background:var(--bg)}
 .cmpt{display:flex;flex-wrap:wrap;align-items:flex-end;gap:28px;padding:18px 4px 6px}.cmpt small{display:block;font-size:12px;color:var(--mu)}.cmpt b{display:block;font:600 40px/1.1 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em}.cmpt .kd{font-size:13px;font-weight:600}.cmpt p{flex-basis:100%;margin:0;font-size:12px;color:var(--mu)}
 #vtip{position:fixed;z-index:300;display:none;pointer-events:none;background:var(--tx);color:var(--bg);font:500 12px Geist,sans-serif;padding:6px 9px;border-radius:8px;max-width:260px;box-shadow:0 6px 18px rgba(0,0,0,.18)}
 .lgd i{border-radius:3px}
+
+.lc-hit{position:absolute;left:0;right:0;top:0;gap:0}
+.lc-hit .cc-c{border-radius:0}.lc-hit .cc-c:hover{background:none}
+.lc-hit .cc-c:hover::after{content:'';position:absolute;top:0;bottom:0;left:50%;width:1px;background:var(--mu);opacity:.5}
+.lc-avg{position:absolute;left:0;right:0;height:0;border-top:1px dashed color-mix(in srgb,var(--mu) 60%,transparent);pointer-events:none}
+.lc-avg span{position:absolute;right:0;bottom:3px;font-size:11px;color:var(--mu);background:var(--s1);padding:0 4px;border-radius:4px}
+.lc-dot{position:absolute;width:10px;height:10px;border-radius:50%;transform:translate(-50%,50%);box-shadow:0 0 0 2px var(--s1);pointer-events:none;z-index:2}
+.lc-lab{position:absolute;transform:translateX(-50%);font:600 11px Geist,sans-serif;color:var(--tx);white-space:nowrap;pointer-events:none;z-index:2;background:var(--s1);padding:1px 5px;border-radius:5px}
+.lc-lab.r{transform:translateX(-100%)}.lc-lab.l{transform:none}
+.lc-strip{display:flex;flex-wrap:wrap;gap:8px 22px;margin:4px 0 14px;padding:10px 0;border-bottom:1px solid var(--line)}
+.lc-strip small{display:block;font-size:12px;color:var(--mu)}.lc-strip b{display:block;font:600 16px Geist,sans-serif;margin-top:2px}.lc-strip b.kd.up{color:var(--ok)}.lc-strip b.kd.dn{color:var(--bad)}
+.lgd i.ln{height:3px;width:14px;border-radius:2px;vertical-align:3px}.lgd i.dash{background:repeating-linear-gradient(90deg,var(--mu) 0 4px,transparent 4px 7px)}
