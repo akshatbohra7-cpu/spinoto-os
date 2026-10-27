@@ -5,6 +5,7 @@ const WA_CATS = ['4W Service', '2W Service', 'Book a Mechanic', 'App Install', '
 const WA_STATUS = ['Planned', 'Sent', 'Results Logged', 'Cancelled'];
 const WA_REASONS = ['Replied STOP', 'Blocked / Reported', 'Asked not to message', 'Wrong number', 'Not on WhatsApp', 'Other'];
 const WA_SAFE = { 'New': 1, 'Gap OK': 1 };
+const WA_CHUNK = 500; // the database returns at most 1,000 rows per request — stay well under it
 const WA_JUNK = new Set(['', 'n/a', 'na', 'n.a', 'none', 'nil', '-', '.', 'null', '0', 'unknown', 'customer', 'name']);
 (function () { const st = document.createElement('style'); st.textContent = '.waseg{overflow-x:auto;max-width:100%}.waseg button{white-space:nowrap}.wa3{grid-template-columns:2fr 1fr auto}@media(max-width:700px){.wa3{grid-template-columns:1fr 1fr}.wa3>div:first-child{grid-column:1/-1}}'; document.head.appendChild(st) })();
 let W = { sub: 'check', camps: [], counts: {}, sum: null, opt: [], optN: 0, loaded: false, loading: false, raw: '', rows: null, filt: 'All', camp: '', date: '', logged: false, armed: '', lk: null, oq: '' };
@@ -137,10 +138,12 @@ async function waCheck() {
   P.forEach(r => { if (!r.phone) r.st = 'Invalid'; else if (seen.has(r.phone)) r.st = 'Duplicate'; else { seen.add(r.phone); uniq.push(r.phone) } });
   const info = {};
   try {
-    for (let i = 0; i < uniq.length; i += 2000) {
-      if (uniq.length > 2000) msg(`Checking… ${Math.min(i + 2000, uniq.length).toLocaleString('en-IN')} / ${uniq.length.toLocaleString('en-IN')}`);
-      const { data, error } = await waSB().rpc('wa_check', { p_phones: uniq.slice(i, i + 2000), p_date: date });
-      if (error) throw error; data.forEach(d => info[d.phone] = d);
+    for (let i = 0; i < uniq.length; i += WA_CHUNK) {
+      if (uniq.length > WA_CHUNK) msg(`Checking… ${Math.min(i + WA_CHUNK, uniq.length).toLocaleString('en-IN')} / ${uniq.length.toLocaleString('en-IN')}`);
+      const { data, error } = await waSB().rpc('wa_check', { p_phones: uniq.slice(i, i + WA_CHUNK), p_date: date });
+      if (error) throw error;
+      if (data.length < Math.min(WA_CHUNK, uniq.length - i)) throw new Error(`database answered ${data.length} of ${Math.min(WA_CHUNK, uniq.length - i)} numbers`);
+      data.forEach(d => info[d.phone] = d);
     }
   } catch (e) { return msg('Check failed: ' + (e.message || e.code)) }
   P.forEach(r => {
@@ -150,6 +153,8 @@ async function waCheck() {
     else if (!d.times) r.st = 'New';
     else { r.days = dayDiff(date, d.last_sent); r.st = r.days < cfg.gap ? 'Too soon' : d.last30 >= cfg.cap ? '30-day cap' : 'Gap OK' }
   });
+  const unchecked = P.filter(r => !r.st).length;
+  if (unchecked) return msg(`Check incomplete: ${unchecked} numbers got no answer. Nothing was changed — please try again.`);
   W.rows = P; W.filt = 'All'; W.logged = false; W.armed = ''; msg(`Checked ${P.length.toLocaleString('en-IN')} — ${P.filter(r => WA_SAFE[r.st]).length.toLocaleString('en-IN')} safe`); render();
 }
 const waSafe = () => (W.rows || []).filter(r => WA_SAFE[r.st]);
