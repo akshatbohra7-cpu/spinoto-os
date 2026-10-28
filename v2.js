@@ -5,7 +5,7 @@ const V2I = {
   orders: 'M6 8h12l-1 13H7L6 8zM9 8V6a3 3 0 0 1 6 0v2', areas: 'M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
   money: 'M3 7h18v12H3zM16 13h2M3 7l3-4h12l3 4', lab: 'M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3', growth: 'M3 17l6-6 4 4 8-8M15 7h6v6',
   team: 'M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 20v-1a4 4 0 0 0-3-3.9', data: 'M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1',
-  phone: 'M7 2h10v20H7zM11 18h2', user: 'M20 21v-1a5 5 0 0 0-5-5H9a5 5 0 0 0-5 5v1M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', cac: 'M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
+  phone: 'M7 2h10v20H7zM11 18h2', user: 'M20 21v-1a5 5 0 0 0-5-5H9a5 5 0 0 0-5 5v1M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', inr: 'M6 4h12M6 9h12M9 4h1a5 5 0 0 1 0 10H6l8 7', cac: 'M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
   repeat: 'M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3', car: 'M5 17h14M6 17l1.5-5h9L18 17M7 17v2M17 17v2', wrench: 'M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z',
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2'
 };
@@ -187,12 +187,18 @@ function vHome2() {
   const card = (tb, icon, label, value, d, note, dark) => `<button class="kp2 ${dark ? 'dark' : ''}" onclick="go('${tb}')"><span class="kh"><span class="ki">${v2ico(icon, 16)}</span>${label}</span><b>${value}</b><span class="kd ${d[1]}">${d[0] || '&nbsp;'}</span><span class="kn">${note}</span></button>`;
   const incl = ['ads', 'wa', 'pr', 'other'].filter(k => E.inc[k]).map(k => ({ ads: 'ads incl. GST', wa: 'WhatsApp', pr: 'PR', other: 'other costs' })[k]).join(', ');
   const cacD = cacP ? [(cacC <= cacP ? '▼ ' : '▲ ') + inr(Math.abs(cacC - cacP)), cacC <= cacP ? 'up' : 'dn'] : ['', 'ne'];
+  // Revenue = order Total of COMPLETED orders (by order date). Open orders shown separately; cancelled / failed never count.
+  const done = r => r.filter(x => /complet/i.test(x.status || '') && amtOf(x) > 0), rev = r => sum(done(r), amtOf);
+  const openAmt = r => sum(r.filter(x => x._ok && !/complet/i.test(x.status || '')), amtOf);
+  const rvC = rev(cur), rvP = prev ? rev(prev) : null, dC = done(cur).length, aovC = dC ? rvC / dC : 0, aovP = prev && done(prev).length ? rvP / done(prev).length : null, opC = openAmt(cur);
   const kpis = [
     card('money', 'money', 'Marketing spend', inr(sC.total), v2delta(sC.total, sP && sP.total, 2), incl ? 'Includes ' + incl : 'Nothing included — set in Analytics › Unit economics'),
     card('ads', 'phone', 'App installs', fmtN(iC), v2delta(iC, iP, 1), iC ? c1(instSp(aC) / iC) + ' per install' : 'From install adsets'),
     card('orders', 'orders', 'Orders placed', fmtN(cur.length), v2delta(cur.length, prev && prev.length, 1), cur.length ? `${fmtN(vo(cur))} valid · ${fmtN(cur.length - vo(cur))} cancelled / failed` : 'No orders in this period'),
+    card('orders', 'inr', 'Revenue', inr(rvC), v2delta(rvC, rvP, 1), (dC ? `${fmtN(dC)} completed orders` : 'From completed orders') + (opC ? ` · ${inr(opC)} more in open orders` : '') + (rvC && sC.total ? ` · ${(rvC / sC.total).toFixed(1)}x spend` : '')),
     card('analytics', 'user', 'New customers', fmtN(nw(cur)), v2delta(nw(cur), prev && nw(prev), 1), vo(cur) ? Math.round(nw(cur) / vo(cur) * 100) + '% of valid orders are first-timers' : 'First-ever valid order by phone'),
     card('analytics', 'repeat', 'Repeat orders', fmtN(rp(cur)), v2delta(rp(cur), prev && rp(prev), 1), vo(cur) ? Math.round(rp(cur) / vo(cur) * 100) + '% of valid orders' : 'Customers ordering again'),
+    card('orders', 'orders', 'Avg order value', aovC ? inr(aovC) : '—', v2delta(aovC, aovP, 1), 'Revenue ÷ completed orders'),
     card('analytics', 'cac', 'Cost per customer', cacC ? inr(cacC) : '—', cacD, 'Spend ÷ new customers' + (+E.target ? ' · target ' + inr(+E.target) : ''), true)
   ].join('');
   // orders split
