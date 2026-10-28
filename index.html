@@ -378,8 +378,9 @@ function exBreak(ds,C){const dim=ds.dims[EX.by[ds.k]]?EX.by[ds.k]:Object.keys(ds
   <div class="mu" style="font-size:12px;margin-top:6px">${g.length>25?`Top 25 of ${g.length}. `:''}Tap a row to filter the whole page to it.</div></div>`}
 
 // --- Orders dataset ---
+const otk=x=>+x.ts||((+new Date(x.date+'T00:00:00+05:30'))+((x.hour!==''&&x.hour!=null&&isFinite(+x.hour))?(+x.hour*36e5+36e5-1):0));
 function ordDS(){const n2=s=>norm(String(s||'').replace(/\n/g,' ')),cnt={};
-  const o=S.orders.filter(x=>x.date).map(x=>({...x,date:String(x.date).slice(0,10),_ok:!/cancel|fail/i.test(x.status||'')})).sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
+  const o=S.orders.filter(x=>x.date).map(x=>({...x,date:String(x.date).slice(0,10),_ok:!/cancel|fail/i.test(x.status||'')})).sort((a,b)=>a.date.localeCompare(b.date)||otk(a)-otk(b)||String(a.id).localeCompare(String(b.id)));
   o.forEach(x=>{x._c=n2(x.contact).replace(/\D/g,'').slice(-10)||n2(x.name).toLowerCase();if(x._ok){cnt[x._c]=(cnt[x._c]||0)+1;x._n=cnt[x._c]}else x._n=0});o.forEach(x=>x._t=cnt[x._c]);
   const gap=R=>{const g=R.filter(x=>x.joined&&x._n===1).map(x=>dd(String(x.joined).slice(0,10),x.date)-1).filter(x=>x>=0);return g.length?g.reduce((a,b)=>a+b,0)/g.length:0};
   return{k:'orders',rows:o,
@@ -390,7 +391,7 @@ function ordDS(){const n2=s=>norm(String(s||'').replace(/\n/g,' ')),cnt={};
     tm:['n','ok','nw'],bm:['ok','cx','nw'],ins:['status','area','service','vehicle','booking'],
     extra:C=>{const v=C.cur.filter(r=>r._ok),rp=v.filter(r=>r._n>1).length,cx=C.cur.length-v.length;return C.cur.length?[['↻',`<b>${rp}</b> of ${v.length} valid orders came from returning customers.`],...(cx?[['✕',`<b>${cx}</b> of ${C.cur.length} placed orders (${Math.round(cx/C.cur.length*100)}%) were cancelled or failed.`]]:[])]:[]}}}
 function vOrders(){const ds=ordDS(),C=exCtx(ds),q=(EX.q.orders||'').toLowerCase(),lim=EX.lim.orders||30;
-  const vh=EX.vh||'all',L0=C.cur.filter(x=>!q||[x.name,x.contact,x.area,x.items,x.vehicle].some(v=>String(v||'').toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id))),L=vh==='all'?L0:L0.filter(x=>vehOf(x)===vh);
+  const vh=EX.vh||'all',L0=C.cur.filter(x=>!q||[x.name,x.contact,x.area,x.items,x.vehicle].some(v=>String(v||'').toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date)||otk(b)-otk(a)||String(b.id).localeCompare(String(a.id))),L=vh==='all'?L0:L0.filter(x=>vehOf(x)===vh);
   const vc=k=>k==='all'?L0.length:L0.filter(x=>vehOf(x)===k).length,vseg=`<div class="pseg">${[['all','All'],['2W','2W'],['4W','4W']].map(([k,l])=>`<button class="${vh===k?'on':''}" onclick="EX.vh='${k}';EX.lim.orders=0;try{localStorage.setItem('ordvh','${k}')}catch(e){};renderNow()">${l} <small style="opacity:.6">${vc(k)}</small></button>`).join('')}</div>`;
   return`<div class="top"><div><h1>Orders</h1><span class="mu">${ds.rows.length} logged all-time</span></div><button class="btn" onclick="openForm('orders')">+ New order</button></div>
   ${exBar(ds)}${exKpis(ds,C)}
@@ -404,7 +405,7 @@ function orderList(L){if(!L.length)return'<div class="c mu">No orders match this
     return`<div class="oc">${av(x.name||'?')}<div class="on1"><b>${esc(x.name||'Unknown')}</b>${!x._ok?`<span class="chip" style="color:var(--bad)">${esc(x.status)}</span>`:x._t>1?`<span class="chip rep">↻ ${ord(x._n)}</span>`:'<span class="chip nw">New</span>'}</div>
     <div class="it" title="${esc(it)}">${esc(it)||'<span class="mu">—</span>'}</div>
     <div class="tg">${v?`<span class="chip ${w}">${esc(v)}</span>`:''}${x.booking?`<span class="chip">${esc(x.booking)}</span>`:''}${x.area?`<span class="chip">📍 ${esc(x.area)}</span>`:''}</div>
-    <div class="rt">${fd(x.date)}</div>${xb('orders',x.id)}</div>`}).join('')}</div>`}
+    <div class="rt">${fd(x.date)}${+x.ts?`<small class="mu" style="display:block;font-size:11px">${new Date(+x.ts).toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit',timeZone:'Asia/Kolkata'})}</small>`:''}</div>${xb('orders',x.id)}</div>`}).join('')}</div>`}
 
 // ===== Ads, Money, Growth datasets + new Home dashboard =====
 const sum=(R,f)=>R.reduce((a,x)=>a+f(x),0),cpx=(s,n)=>n?s/n:0,c0=x=>x?c1(x):'—';
