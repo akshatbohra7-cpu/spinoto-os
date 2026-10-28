@@ -72,7 +72,7 @@ async function waLoad() {
     for (const r of [n, s, o, oc]) if (r.error) throw r.error;
     W.camps = c.sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : (a.created_at < b.created_at ? 1 : -1));
     W.counts = {}; n.data.forEach(x => W.counts[x.campaign_id] = x);
-    W.sum = s.data; W.opt = o.data; W.optN = oc.count || 0; W.loaded = true;
+    W.sum = s.data; W.opt = o.data; W.optN = oc.count || 0; W.loaded = true; W.aud = null;
   } catch (e) { msg('WhatsApp data: ' + (e.message || e.code)) }
   W.loading = false; render();
 }
@@ -84,11 +84,11 @@ const waCost = c => { const cpm = c.cost_per_msg ?? WS().cpm; return cpm ? waSen
 function vWA() {
   if (!waSB()) return `<div class="top"><h1>WhatsApp</h1></div><div class="c mu">Needs the Supabase connection (works on the live site).</div>`;
   if (!W.loaded) { if (!W.loading) setTimeout(waEnter, 0); return `<div class="top"><h1>WhatsApp</h1></div><div class="c mu">Loading…</div>` }
-  const subs = [['check', 'Check & Send'], ['camps', 'Campaigns'], ['over', 'Overview'], ['opt', 'Opt-outs'], ['set', 'Settings']];
+  const subs = [['check', 'Check & Send'], ['camps', 'Campaigns'], ['aud', 'Audiences'], ['over', 'Overview'], ['opt', 'Opt-outs'], ['set', 'Settings']];
   const await_ = W.camps.filter(c => c.status === 'Sent').length;
   return `<div class="top"><div><h1>WhatsApp</h1><span class="mu">${nfmt(W.sum?.total)} messages logged · ${W.camps.length} campaigns${await_ ? ` · <b style="color:var(--warn)">${await_} awaiting results</b>` : ''}</span></div>
   <div class="seg waseg">${subs.map(([k, n]) => `<button class="${W.sub === k ? 'on' : ''}" onclick="waSub('${k}')">${n}</button>`).join('')}</div></div>` +
-    ({ check: waVCheck, camps: waVCamps, over: waVOver, opt: waVOpt, set: waVSet }[W.sub]());
+    ({ check: waVCheck, camps: waVCamps, aud: waVAud, over: waVOver, opt: waVOpt, set: waVSet }[W.sub]());
 }
 function waSub(k) { W.sub = k; W.armed = ''; try { localStorage.setItem('wasub', k) } catch (e) { } render() }
 
@@ -230,6 +230,57 @@ async function waCampSave(id) {
 }
 async function waCampDel(id) { const { error } = await waSB().from('wa_campaigns').delete().eq('id', id); if (error) return msg('Could not delete: ' + error.message); if (W.camp === id) W.camp = ''; closeAll(); await waLoad() }
 async function waUnlog(id) { const d = $('#wc_undo').value; if (!d) return; const { data, error } = await waSB().rpc('wa_unlog', { p_campaign: id, p_date: d }); if (error) return msg('Undo failed: ' + error.message); closeAll(); msg(`Removed ${data} sends`); await waLoad() }
+
+// ---------- audiences ----------
+// Every number ever logged, grouped by the campaign's "Audience" label (read-only — nothing is changed here).
+async function waAudLoad() {
+  if (W.audLoading) return; W.audLoading = true;
+  const { data, error } = await waSB().rpc('wa_audiences');
+  W.audLoading = false;
+  if (error) { W.aud = []; return msg('Audiences: ' + error.message) }
+  W.aud = data; render();
+}
+async function waAudPeople(a) {
+  let out = [], from = 0;
+  for (; ;) {
+    const { data, error } = await waSB().rpc('wa_audience_people', { p_audience: a }).range(from, from + 999);
+    if (error) throw error; out = out.concat(data); if (data.length < 1000) break; from += 1000;
+  }
+  return out;
+}
+function waVAud() {
+  if (!W.aud) { if (!W.audLoading) setTimeout(waAudLoad, 0); return `<div class="c mu">Loading audiences…</div>` }
+  if (!W.aud.length) return `<div class="c mu">No audiences yet. Give each campaign an <b>Audience</b> name (e.g. “K24 Gota”) and every number you mark as sent is saved under it.</div>`;
+  const t = today(), tot = W.aud.reduce((a, x) => a + x.people, 0);
+  const card = (x, i) => {
+    const ago = dayDiff(t, x.last_sent);
+    return `<div class="c" style="display:flex;flex-direction:column;gap:10px">
+      <div class="row" style="justify-content:space-between;margin:0;align-items:flex-start"><div><b style="font-size:16px">${esc(x.audience)}</b><div class="mu" style="font-size:12px;margin-top:2px">${x.campaigns} campaign${x.campaigns === 1 ? '' : 's'} · last sent ${ago <= 0 ? 'today' : ago === 1 ? 'yesterday' : ago + ' days ago'} (${fmtD(x.last_sent)})</div></div>
+      <div style="text-align:right"><b style="font-size:26px;font-weight:800;letter-spacing:-.02em">${nfmt(x.people)}</b><div class="mu" style="font-size:11.5px">people</div></div></div>
+      <div class="row" style="margin:0;gap:6px;flex-wrap:wrap">${x.recent7 ? `<span class="chip warn">${nfmt(x.recent7)} messaged in last 7 days</span>` : `<span class="chip ok">All rested 7+ days</span>`}${x.opted ? `<span class="chip bad">${nfmt(x.opted)} opted out</span>` : ''}</div>
+      <div class="row" style="margin:0;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="waAudDown(${i})">⬇ Download</button><button class="btn g sm" onclick="waAudUse(${i})">Send again → Check & Send</button></div></div>`;
+  };
+  return `<div class="row" style="justify-content:space-between;margin-bottom:10px"><span class="mu">${W.aud.length} audiences · ${nfmt(tot)} people. Built automatically from every number you marked as sent, grouped by the campaign's Audience name.</span><button class="btn g sm" onclick="W.aud=null;render()">↻ Refresh</button></div>
+  <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(290px,1fr))">${W.aud.map(card).join('')}</div>
+  <p class="mu" style="font-size:12px;margin-top:12px">Download gives the upload-ready file (name, Phone Number, Country Code) with opted-out numbers already removed. “Send again” loads the audience into Check & Send so the gap and 30-day rules are applied before you send.</p>`;
+}
+async function waAudDown(i) {
+  const x = W.aud[i]; if (!x) return; msg('Preparing ' + x.audience + '…');
+  try {
+    const P = (await waAudPeople(x.audience)).filter(r => !r.opted), cc = WS().cc, csvq = s => /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    const data = 'name,Phone Number,Country Code\n' + P.map(r => [csvq(r.name || ''), r.phone, cc].join(',')).join('\n');
+    window.SpinotoRuntime.browserDownload({ filename: `audience_${slug(x.audience)}_${today()}.csv`, data });
+    msg(`Downloaded ${P.length.toLocaleString('en-IN')} numbers`);
+  } catch (e) { msg('Download failed: ' + (e.message || e.code)) }
+}
+async function waAudUse(i) {
+  const x = W.aud[i]; if (!x) return; msg('Loading ' + x.audience + '…');
+  try {
+    const P = await waAudPeople(x.audience);
+    W.raw = P.map(r => r.phone + (r.name ? '\t' + r.name : '')).join('\n'); W.rows = null; W.logged = false; W.armed = '';
+    W.camp = ''; waSub('check'); await waCheck();
+  } catch (e) { msg('Could not load: ' + (e.message || e.code)) }
+}
 
 // ---------- overview ----------
 function waVOver() {
