@@ -15,6 +15,7 @@ function navHTML() {
   const ok = k => k === 'team' ? isSuper() : canTab(k) !== 'none';
   return `<div class="brand"><i>S</i><b>spinoto<span>.os</span></b></div><button class="jump" onclick="openPal()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>Jump to…</span><kbd>⌘K</kbd></button>` +
     NAVG.map(([g, it]) => { const L = it.filter(([k]) => ok(k)); return L.length ? `<div class="grp">${g ? `<div class="gl">${g}</div>` : ''}${L.map(([k, n]) => `<button class="n ${k === tab ? 'on' : ''}" onclick="go('${k}')">${v2ico(k)}<span>${n}</span></button>`).join('')}</div>` : '' }).join('') +
+    `<div class="live ${window.LIVE && !LIVE.ok ? 'off' : ''}" title="${window.LIVE && !LIVE.ok ? 'Connection lost — reconnecting. Data will catch up automatically.' : 'Live — new orders and changes appear automatically'}"><i></i>${window.LIVE && !LIVE.ok ? 'Reconnecting…' : 'Live'}</div>` +
     (ME ? `<button class="me" onclick="meMenu()"><span class="ini">${esc((ME.name || ME.email).slice(0, 2).toUpperCase())}</span><span><b style="font-size:13px;font-weight:600">${esc((ME.name || ME.email).split(' ')[0])}</b><small>${esc(roleLabel(ME.role))}</small></span></button>` : '');
 }
 

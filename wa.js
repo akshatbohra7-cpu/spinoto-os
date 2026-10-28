@@ -76,7 +76,16 @@ async function waLoad() {
   } catch (e) { msg('WhatsApp data: ' + (e.message || e.code)) }
   W.loading = false; render();
 }
-function waEnter() { if (!W.date) W.date = today(); waLoad() }
+function waEnter() { if (!W.date) W.date = today(); waLive(); waLoad() }
+// Live: when anyone logs sends, edits a campaign or adds an opt-out, reload (batched). Waits while you're typing in the paste box.
+function waLive() {
+  if (W.live || !waSB()) return; W.live = true;
+  let t = 0; const soon = () => { clearTimeout(t); t = setTimeout(() => { if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') return soon(); if (W.loaded && !W.loading) waLoad() }, 2000) };
+  const ch = waSB().channel('wa-live');
+  ['wa_campaigns', 'wa_sends', 'wa_optouts'].forEach(t2 => ch.on('postgres_changes', { event: '*', schema: 'public', table: t2 }, soon));
+  ch.subscribe();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && W.loaded) soon() });
+}
 const waSent = c => (W.counts[c.id] || {}).sent || 0;
 const waCost = c => { const cpm = c.cost_per_msg ?? WS().cpm; return cpm ? waSent(c) * cpm : 0 };
 

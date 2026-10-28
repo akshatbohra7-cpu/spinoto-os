@@ -25,9 +25,31 @@ function makeSupaDB(client) {
     const docs = Object.entries(cache[c] || {}).map(([id, data]) => ({ id, data: () => data }));
     (listeners[c] || []).forEach(cb => cb({ docs }));
   }
+  // Live updates: many rows can arrive at once (e.g. the sheet sync pushes 400 orders) — redraw once, not 400 times.
+  const timers = {};
+  function fireSoon(c) { clearTimeout(timers[c]); timers[c] = setTimeout(() => fire(c), 250) }
+  const subbed = new Set(), status = {};
+  const LIVE = window.LIVE = window.LIVE || { ok: true, at: Date.now() };
+  function setLive() {
+    const ok = [...subbed].every(c => status[c] === 'SUBSCRIBED') && navigator.onLine !== false;
+    if (ok !== LIVE.ok) { LIVE.ok = ok; if (window.render) window.render() }
+  }
+  // Re-download everything (after the laptop slept, wifi dropped, or the tab sat in the background).
+  async function resyncAll() {
+    for (const c of subbed) { try { await fetchAll(c); fire(c) } catch (e) { } }
+    LIVE.at = Date.now();
+  }
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) hiddenAt = Date.now();
+    else if (hiddenAt && Date.now() - hiddenAt > 30000) resyncAll();
+  });
+  window.addEventListener('online', () => { setLive(); resyncAll() });
+  window.addEventListener('offline', setLive);
+  setInterval(() => { if (!document.hidden) resyncAll() }, 5 * 60 * 1000); // safety net
   function ensureSub(c) {
-    if (ensureSub._subbed?.has(c)) return;
-    (ensureSub._subbed ||= new Set()).add(c);
+    if (subbed.has(c)) return;
+    subbed.add(c);
     client.channel('docs-' + c)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'docs', filter: `collection=eq.${c}` }, payload => {
         if (!cache[c]) cache[c] = {};
@@ -39,11 +61,18 @@ function makeSupaDB(client) {
           if (same(cache[c][payload.new.id], payload.new.data)) return;
           cache[c][payload.new.id] = payload.new.data;
         }
-        fire(c);
-      }).subscribe();
+        LIVE.at = Date.now();
+        fireSoon(c);
+      }).subscribe(st => {
+        const was = status[c]; status[c] = st;
+        // reconnected after a drop → fetch what we missed while offline
+        if (st === 'SUBSCRIBED' && was && was !== 'SUBSCRIBED') fetchAll(c).then(() => fire(c)).catch(() => { });
+        setLive();
+      });
   }
 
   return {
+    resync: resyncAll,
     collection(c) {
       return {
         onSnapshot(cb, onErr) {
