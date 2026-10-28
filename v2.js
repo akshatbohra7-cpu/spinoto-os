@@ -184,7 +184,7 @@ function vHome2() {
   const nw = r => r.filter(x => x._n === 1).length, rp = r => r.filter(x => x._n > 1).length, vo = r => r.filter(x => x._ok).length;
   const E = ECD(), cacC = nw(cur) ? sC.total / nw(cur) : 0, cacP = prev && nw(prev) ? sP.total / nw(prev) : null;
   const iC = inst(aC), iP = aP ? inst(aP) : null;
-  const card = (tb, icon, label, value, d, note, dark) => `<button class="kp2 ${dark ? 'dark' : ''}" onclick="go('${tb}')"><span class="kh"><span class="ki">${v2ico(icon, 16)}</span>${label}</span><b>${value}</b><span class="kd ${d[1]}">${d[0] || '&nbsp;'}</span><span class="kn">${note}</span></button>`;
+  const card = (tb, icon, label, value, d, note, dark) => `<button class="kp2 ${dark ? 'dark' : ''}" onclick="${tb.startsWith('lens:') ? `goLens('${tb.slice(5)}')` : `go('${tb}')`}"><span class="kh"><span class="ki">${v2ico(icon, 16)}</span>${label}</span><b>${value}</b><span class="kd ${d[1]}">${d[0] || '&nbsp;'}</span><span class="kn">${note}</span></button>`;
   const incl = ['ads', 'wa', 'pr', 'other'].filter(k => E.inc[k]).map(k => ({ ads: 'ads incl. GST', wa: 'WhatsApp', pr: 'PR', other: 'other costs' })[k]).join(', ');
   const cacD = cacP ? [(cacC <= cacP ? '▼ ' : '▲ ') + inr(Math.abs(cacC - cacP)), cacC <= cacP ? 'up' : 'dn'] : ['', 'ne'];
   // Revenue = order Total of COMPLETED orders (by order date). Open orders shown separately; cancelled / failed never count.
@@ -195,10 +195,10 @@ function vHome2() {
     card('money', 'money', 'Marketing spend', inr(sC.total), v2delta(sC.total, sP && sP.total, 2), incl ? 'Includes ' + incl : 'Nothing included — set in Analytics › Unit economics'),
     card('ads', 'phone', 'App installs', fmtN(iC), v2delta(iC, iP, 1), iC ? c1(instSp(aC) / iC) + ' per install' : 'From install adsets'),
     card('orders', 'orders', 'Orders placed', fmtN(cur.length), v2delta(cur.length, prev && prev.length, 1), cur.length ? `${fmtN(vo(cur))} valid · ${fmtN(cur.length - vo(cur))} cancelled / failed` : 'No orders in this period'),
-    card('orders', 'inr', 'Revenue', inr(rvC), v2delta(rvC, rvP, 1), (dC ? `${fmtN(dC)} completed orders` : 'From completed orders') + (opC ? ` · ${inr(opC)} more in open orders` : '') + (rvC && sC.total ? ` · ${(rvC / sC.total).toFixed(1)}x spend` : '')),
+    card('lens:revenue', 'inr', 'Revenue', inr(rvC), v2delta(rvC, rvP, 1), (dC ? `${fmtN(dC)} completed orders` : 'From completed orders') + (opC ? ` · ${inr(opC)} more in open orders` : '') + (rvC && sC.total ? ` · ${(rvC / sC.total).toFixed(1)}x spend` : '')),
     card('analytics', 'user', 'New customers', fmtN(nw(cur)), v2delta(nw(cur), prev && nw(prev), 1), vo(cur) ? Math.round(nw(cur) / vo(cur) * 100) + '% of valid orders are first-timers' : 'First-ever valid order by phone'),
     card('analytics', 'repeat', 'Repeat orders', fmtN(rp(cur)), v2delta(rp(cur), prev && rp(prev), 1), vo(cur) ? Math.round(rp(cur) / vo(cur) * 100) + '% of valid orders' : 'Customers ordering again'),
-    card('orders', 'orders', 'Avg order value', aovC ? inr(aovC) : '—', v2delta(aovC, aovP, 1), 'Revenue ÷ completed orders'),
+    card('lens:revenue', 'orders', 'Avg order value', aovC ? inr(aovC) : '—', v2delta(aovC, aovP, 1), 'Revenue ÷ completed orders'),
     card('analytics', 'cac', 'Cost per customer', cacC ? inr(cacC) : '—', cacD, 'Spend ÷ new customers' + (+E.target ? ' · target ' + inr(+E.target) : ''), true)
   ].join('');
   // orders split
@@ -278,6 +278,43 @@ function areaCSV() {
   window.SpinotoRuntime.browserDownload({ filename: 'spinoto-areas-' + today() + '.csv', data });
 }
 
+// ---------- REVENUE ----------
+// Revenue = order Total of COMPLETED orders (by order date). One order = one total, so a multi-item order is credited
+// to its first (main) service; add-ons are counted separately in the "Add-ons" column.
+const isDone = x => /complet/i.test(x.status || '') && amtOf(x) > 0;
+const mainSvc = x => { const f = String(x.items || '').split(/,(?![^(]*\))/)[0].replace(/\(.*?\)/g, '').replace(/\s+/g, ' ').trim(); return f || '—' };
+function revDS() {
+  const all = ordersAll(), rows = all.filter(isDone), n2 = s => norm(String(s || ''));
+  const rv = R => sum(R, amtOf), inrK = v => inr(Math.round(v));
+  return {
+    k: 'rev', rows,
+    dims: {
+      service: { l: 'Service', v: mainSvc }, vehicle: { l: 'Vehicle', v: r => vehOf(r) || '—' },
+      stype: { l: 'Service type', v: r => n2(r.service_type) || 'Not set' }, area: { l: 'Area', v: r => areaOf(r) },
+      cust: { l: 'Customer', v: r => r._n > 1 ? 'Repeat' : 'New' }, booking: { l: 'Booking', v: r => n2(r.booking) || '—' },
+      wd: { l: 'Weekday', v: r => WD[new Date(r.date + 'T00:00:00').getDay()] }
+    },
+    ms: [
+      { k: 'rv', l: 'Revenue', f: R => rv(R), fmt: inrK, up: 1 },
+      { k: 'n', l: 'Completed orders', f: R => R.length, fmt: fmtN, up: 1 },
+      { k: 'aov', l: 'Avg order value', f: R => R.length ? rv(R) / R.length : 0, fmt: inrK, up: 1 },
+      { k: 'pd', l: 'Revenue / day', f: (R, n) => n ? rv(R) / n : 0, fmt: inrK, up: 1 },
+      { k: 'ad', l: 'Orders with add-ons', f: R => R.filter(r => /,(?![^(]*\))/.test(r.items || '')).length, fmt: fmtN, up: 1 }
+    ],
+    tm: ['rv', 'n', 'aov'], bm: ['n', 'aov', 'ad'], xFirst: 1, ins: ['service', 'vehicle', 'stype', 'area'],
+    extra: C => {
+      const out = [], inP = all.filter(x => x.date >= C.R.a && x.date <= C.R.b);
+      const open = inP.filter(x => x._ok && !/complet/i.test(x.status || '')), zero = inP.filter(x => /complet/i.test(x.status || '') && !(amtOf(x) > 0)).length;
+      const lost = inP.filter(x => !x._ok);
+      if (open.length) out.push(['⏳', `<b>${inr(sum(open, amtOf))}</b> more is in ${open.length} open order${open.length > 1 ? 's' : ''} — it counts once they're completed.`]);
+      if (lost.length) out.push(['✕', `<b>${inr(sum(lost, amtOf))}</b> was lost to ${lost.length} cancelled / failed orders.`]);
+      if (zero) out.push(['⚠️', `${zero} completed order${zero > 1 ? 's have' : ' has'} a ₹0 total in the admin panel and ${zero > 1 ? 'are' : 'is'} left out.`]);
+      return out;
+    }
+  };
+}
+function goLens(k) { AN.lens = k; try { localStorage.setItem('anlens', k) } catch (e) { } go('analytics') }
+
 // ---------- ANALYTICS ----------
 let AN = { lens: 'orders' }; try { AN.lens = localStorage.getItem('anlens') || 'orders' } catch (e) { }
 function explore(ds) { const C = exCtx(ds); return `${exBar(ds)}${exKpis(ds, C)}<div class="bento" style="margin-top:14px"><div class="s8">${exTrend(ds, C)}</div><div class="s4">${exInsights(ds, C)}</div></div><div style="margin-top:14px">${exBreak(ds, C)}</div>` }
@@ -291,7 +328,7 @@ function vAnalytics() {
   const n2 = cur.filter(x => vehOf(x) === '2W').length, nw = cur.filter(x => x._n === 1).length, sp = spendIn(R.a, R.b, M);
   const wdTop = (() => { const c = WD.map((d, i) => [d, cur.filter(x => new Date(x.date + 'T00:00:00').getDay() === i).length]).sort((a, b) => b[1] - a[1]); return c[0] && c[0][1] ? 'Peak: ' + c[0][0] : 'No orders yet' })();
   const L = [
-    ['orders', 'orders', 'Orders', fmtN(cur.length) + ' placed · ' + fmtN(cur.filter(x => !x._ok).length) + ' cancelled'], ['ads', 'ads', 'Advertising', inr(sum(M.rows.filter(x => x.date >= R.a && x.date <= R.b), x => x.dSpend)) + ' spend'],
+    ['orders', 'orders', 'Orders', fmtN(cur.length) + ' placed · ' + fmtN(cur.filter(x => !x._ok).length) + ' cancelled'], ['revenue', 'inr', 'Revenue', inr(sum(cur.filter(isDone), amtOf)) + ' completed'], ['ads', 'ads', 'Advertising', inr(sum(M.rows.filter(x => x.date >= R.a && x.date <= R.b), x => x.dSpend)) + ' spend'],
     ['installs', 'growth', 'Installs & users', (growthDS().last ? fmtN(growthDS().last.total) + ' users' : 'Log app users')], ['vehicles', 'car', 'Vehicles & models', cur.length ? `2W ${Math.round(n2 / cur.length * 100)}% · 4W ${100 - Math.round(n2 / cur.length * 100)}%` : '—'],
     ['services', 'wrench', 'Services sold', (topN(cur, x => v2n(x.items), 1)[0] || ['—'])[0]], ['areas', 'areas', 'Areas', new Set(cur.map(areaOf).filter(a => a !== '—')).size + ' areas'],
     ['days', 'clock', 'Days & times', wdTop], ['econ', 'cac', 'CAC & unit economics', nw ? inr(sp.total / nw) + ' per customer' : '—'],
@@ -301,6 +338,7 @@ function vAnalytics() {
   if (!L.find(x => x[0] === AN.lens)) AN.lens = 'orders';
   const body = ({
     orders: () => { const R2 = exRange(O.length ? O : M.rows); return `<section class="c" style="margin-bottom:14px"><div class="hd"><h2>Order status · ${fd(R2.a)} – ${fd(R2.b)}</h2><span class="mu" style="font-size:12px">Cancelled &amp; failed are left out of every other number</span></div>${statusPanel(R2.a, R2.b)}</section>` + explore(ordDS()) },
+    revenue: () => explore(revDS()),
     ads: () => explore(adsDS(M)),
     installs: () => explore(growthDS()),
     vehicles: () => { const ds = dsVariant('veh', 'vehicle', { vehicle: { l: 'Vehicle', v: r => vehOf(r) }, model: { l: 'Model', v: r => v2n(r.model) || '—' } }); return (O.some(x => x.model) ? '' : `<div class="c" style="margin-bottom:14px;font-size:13px">Vehicle <b>model</b> isn't on your orders yet — it fills in automatically once the Google Sheet sync sends a model column.</div>`) + explore(ds) },

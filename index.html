@@ -360,7 +360,7 @@ function exInsArr(ds,C){const out=[],m=ds.ms[0],tot=m.f(C.cur,C.R.n);
     const pc=Math.round(top.v/tot*100);if(g.length>1&&top.v/tot>=.3&&!(out.seen=out.seen||new Set()).has(pc+'|'+top.v)&&out.seen.add(pc+'|'+top.v))out.push(['🎯',`<b>${esc(top.k)}</b> drives ${Math.round(top.v/tot*100)}% of ${m.l.toLowerCase()} by ${d.l.toLowerCase()}.`]);
     if(C.prev){const mv=g.filter(x=>x.p!==null&&(x.v+x.p)>=Math.max(3,tot*.05)).map(x=>({...x,dx:x.v-x.p})).sort((a,b)=>Math.abs(b.dx)-Math.abs(a.dx))[0];
       if(mv&&Math.abs(mv.dx)>=Math.max(2,tot*.05)&&!(out.seen=out.seen||new Set()).has('m'+mv.p+'|'+mv.v)&&out.seen.add('m'+mv.p+'|'+mv.v))out.push([mv.dx>0?'⬆️':'⬇️',`${d.l} <b>${esc(mv.k)}</b> ${mv.dx>0?'grew':'fell'} ${m.fmt(mv.p)} → ${m.fmt(mv.v)}.`])}});
-  (ds.extra?ds.extra(C):[]).forEach(x=>out.push(x));return out}
+  (ds.extra?ds.extra(C):[]).forEach((x,i)=>ds.xFirst?out.splice(1+i,0,x):out.push(x));return out}
 function exInsights(ds,C){const out=exInsArr(ds,C);
   return`<div class="c ins"><div class="ct">What stands out</div>${out.slice(0,6).map(([i,t])=>`<div class="in1"><span>${i}</span><div>${t}</div></div>`).join('')||'<div class="mu">Not enough data in this period yet.</div>'}</div>`}
 
