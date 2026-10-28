@@ -290,7 +290,7 @@ async function addIdea(i){const x=IDEAS[i];if(await put('content',String(Date.no
 function skelHome(){return db?'':`<div class="bento"><div class="c s5" style="height:230px"><div class="skel" style="height:100%;border-radius:16px"></div></div><div class="kp s7">${[1,2,3,4].map(()=>'<div class="c" style="height:105px"><div class="skel" style="height:100%;border-radius:14px"></div></div>').join('')}</div></div>`}
 // ===== Explore engine: one date range + filters + breakdowns, shared by every data tab =====
 let EX=(()=>{try{return JSON.parse(localStorage.getItem('spx'))||{}}catch(e){return{}}})();
-EX={per:'30d',from:'',to:'',f:{},by:{},tm:{},sort:{},...EX,pop:'',q:{},lim:{}};
+EX={per:'30d',from:'',to:'',f:{},by:{},tm:{},sort:{},...EX,pop:'',q:{},lim:{}};try{EX.vh=localStorage.getItem('ordvh')||'all'}catch(e){EX.vh='all'}
 const exSave=()=>{try{localStorage.setItem('spx',JSON.stringify({per:EX.per,from:EX.from,to:EX.to,f:EX.f,by:EX.by,tm:EX.tm,sort:EX.sort}))}catch(e){}};
 const PER=[['td','Today'],['yd','Yesterday'],['7d','7 days'],['30d','30 days'],['mtd','This month'],['lm','Last month'],['90d','90 days'],['all','All time'],['custom','Custom']];
 const WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -390,12 +390,13 @@ function ordDS(){const n2=s=>norm(String(s||'').replace(/\n/g,' ')),cnt={};
     tm:['n','ok','nw'],bm:['ok','cx','nw'],ins:['status','area','service','vehicle','booking'],
     extra:C=>{const v=C.cur.filter(r=>r._ok),rp=v.filter(r=>r._n>1).length,cx=C.cur.length-v.length;return C.cur.length?[['↻',`<b>${rp}</b> of ${v.length} valid orders came from returning customers.`],...(cx?[['✕',`<b>${cx}</b> of ${C.cur.length} placed orders (${Math.round(cx/C.cur.length*100)}%) were cancelled or failed.`]]:[])]:[]}}}
 function vOrders(){const ds=ordDS(),C=exCtx(ds),q=(EX.q.orders||'').toLowerCase(),lim=EX.lim.orders||30;
-  const L=C.cur.filter(x=>!q||[x.name,x.contact,x.area,x.items,x.vehicle].some(v=>String(v||'').toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+  const vh=EX.vh||'all',L0=C.cur.filter(x=>!q||[x.name,x.contact,x.area,x.items,x.vehicle].some(v=>String(v||'').toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id))),L=vh==='all'?L0:L0.filter(x=>vehOf(x)===vh);
+  const vc=k=>k==='all'?L0.length:L0.filter(x=>vehOf(x)===k).length,vseg=`<div class="pseg">${[['all','All'],['2W','2W'],['4W','4W']].map(([k,l])=>`<button class="${vh===k?'on':''}" onclick="EX.vh='${k}';EX.lim.orders=0;try{localStorage.setItem('ordvh','${k}')}catch(e){};renderNow()">${l} <small style="opacity:.6">${vc(k)}</small></button>`).join('')}</div>`;
   return`<div class="top"><div><h1>Orders</h1><span class="mu">${ds.rows.length} logged all-time</span></div><button class="btn" onclick="openForm('orders')">+ New order</button></div>
   ${exBar(ds)}${exKpis(ds,C)}
   <div class="bento" style="margin-top:14px"><div class="s8">${exTrend(ds,C)}</div><div class="s4">${exInsights(ds,C)}</div></div>
   <div style="margin-top:14px">${exBreak(ds,C)}</div>
-  <div class="lh"><h3>Orders in this view <span class="mu" style="text-transform:none;letter-spacing:0;font-weight:500">· ${L.length}</span></h3><input id="x_q_orders" class="srch" placeholder="Search name, phone, area, service…" value="${esc(EX.q.orders||'')}" oninput="EX.q.orders=this.value;EX.lim.orders=0;render()"></div>
+  <div class="lh"><h3>Orders in this view <span class="mu" style="text-transform:none;letter-spacing:0;font-weight:500">· ${L.length}</span></h3><div class="row" style="margin:0;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end;flex:1 1 auto">${vseg}<input id="x_q_orders" class="srch" style="flex:1 1 220px;width:auto;margin:0" placeholder="Search name, phone, area, service…" value="${esc(EX.q.orders||'')}" oninput="EX.q.orders=this.value;EX.lim.orders=0;render()"></div></div>
   ${orderList(L.slice(0,lim))}${L.length>lim?`<button class="btn g more" onclick="EX.lim.orders=${lim+50};renderNow()">Show ${Math.min(50,L.length-lim)} more</button>`:''}`}
 function orderList(L){if(!L.length)return'<div class="c mu">No orders match this view.</div>';
   const ord=n=>n+(n%100>10&&n%100<14?'th':['th','st','nd','rd'][n%10]||'th');
