@@ -185,7 +185,7 @@ function vHome2() {
   const nw = r => r.filter(x => x._n === 1).length, rp = r => r.filter(x => x._n > 1).length, vo = r => r.filter(x => x._ok).length;
   const E = ECD(), cacC = nw(cur) ? sC.total / nw(cur) : 0, cacP = prev && nw(prev) ? sP.total / nw(prev) : null;
   const iC = inst(aC), iP = aP ? inst(aP) : null;
-  const card = (tb, icon, label, value, d, note, dark) => `<button class="kp2 ${dark ? 'dark' : ''}" onclick="${tb.startsWith('lens:') ? `goLens('${tb.slice(5)}')` : `go('${tb}')`}"><span class="kh"><span class="ki">${v2ico(icon, 16)}</span>${label}</span><b>${value}</b><span class="kd ${d[1]}">${d[0] || '&nbsp;'}</span><span class="kn">${note}</span></button>`;
+  const card = (tb, icon, label, value, d, note, dark) => `<button class="kp2 ${dark ? 'dark' : ''}" onclick="${tb.startsWith('fn:') ? tb.slice(3) : tb.startsWith('lens:') ? `goLens('${tb.slice(5)}')` : `go('${tb}')`}"><span class="kh"><span class="ki">${v2ico(icon, 16)}</span>${label}</span><b>${value}</b><span class="kd ${d[1]}">${d[0] || '&nbsp;'}</span><span class="kn">${note}</span></button>`;
   const incl = ['ads', 'wa', 'pr', 'other'].filter(k => E.inc[k]).map(k => ({ ads: 'ads incl. GST', wa: 'WhatsApp', pr: 'PR', other: 'other costs' })[k]).join(', ');
   const cacD = cacP ? [(cacC <= cacP ? '▼ ' : '▲ ') + inr(Math.abs(cacC - cacP)), cacC <= cacP ? 'up' : 'dn'] : ['', 'ne'];
   // Revenue = order Total of COMPLETED orders (by order date). Open orders shown separately; cancelled / failed never count.
@@ -198,7 +198,7 @@ function vHome2() {
     card('orders', 'orders', 'Orders placed', fmtN(cur.length), v2delta(cur.length, prev && prev.length, 1), cur.length ? `${fmtN(vo(cur))} valid · ${fmtN(cur.length - vo(cur))} cancelled / failed` : 'No orders in this period'),
     card('lens:revenue', 'inr', 'Revenue', inr(rvC), v2delta(rvC, rvP, 1), (dC ? `${fmtN(dC)} completed orders` : 'From completed orders') + (opC ? ` · ${inr(opC)} more in open orders` : '') + (rvC && sC.total ? ` · ${(rvC / sC.total).toFixed(1)}x spend` : '')),
     card('analytics', 'user', 'New customers', fmtN(nw(cur)), v2delta(nw(cur), prev && nw(prev), 1), vo(cur) ? Math.round(nw(cur) / vo(cur) * 100) + '% of valid orders are first-timers' : 'First-ever valid order by phone'),
-    card('analytics', 'repeat', 'Repeat orders', fmtN(rp(cur)), v2delta(rp(cur), prev && rp(prev), 1), vo(cur) ? Math.round(rp(cur) / vo(cur) * 100) + '% of valid orders' : 'Customers ordering again'),
+    card('fn:repOpen()', 'repeat', 'Repeat orders', fmtN(rp(cur)), v2delta(rp(cur), prev && rp(prev), 1), vo(cur) ? Math.round(rp(cur) / vo(cur) * 100) + '% of valid orders' : 'Customers ordering again'),
     card('lens:revenue', 'orders', 'Avg order value', aovC ? inr(aovC) : '—', v2delta(aovC, aovP, 1), 'Revenue ÷ completed orders'),
     card('analytics', 'cac', 'Cost per customer', cacC ? inr(cacC) : '—', cacD, 'Spend ÷ new customers' + (+E.target ? ' · target ' + inr(+E.target) : ''), true)
   ].join('');
@@ -426,3 +426,71 @@ function vEcon(M, O) {
   <section class="c" style="margin-top:16px"><div class="hd"><h2>Do customers come back?</h2><span class="mu" style="font-size:12px">% ordering again, by month of first order</span></div>${cohortTable(O)}</section>`;
 }
 async function econSet(ch) { const cur = ECD(); delete cur.id; if (await put('settings', 'econ', { ...cur, ...ch })) msg('Saved ✓') }
+
+// ---------- REPEAT CUSTOMERS (drawer) ----------
+// Who: customers with at least one repeat (2nd+ valid) order inside the current period + filters.
+// Everything is computed from orders already in memory — no extra loading.
+let RC = { q: '', vh: 'all', sort: 'orders', sel: '' };
+function rcData() {
+  const ds = ordDS(), C = exCtx(ds), all = ds.rows, by = {};
+  all.forEach(x => { if (x._c) (by[x._c] = by[x._c] || []).push(x) });
+  const keys = [...new Set(C.cur.filter(x => x._n > 1).map(x => x._c))];
+  const L = keys.map(k => {
+    const O = by[k], V = O.filter(x => x._ok), inP = C.cur.filter(x => x._c === k && x._ok), last = O[O.length - 1];
+    const vs = [...new Set(V.map(vehOf).filter(v => v === '2W' || v === '4W'))].sort();
+    return { k, name: [...O].reverse().map(x => v2n(x.name)).find(Boolean) || 'Unknown', phone: (O.find(x => x.contact) || {}).contact || '', O, V, inP: inP.length, rp: inP.filter(x => x._n > 1).length, first: V[0] && V[0].date, last: last.date, vs, spent: sum(V.filter(isDone), amtOf), area: [...O].reverse().map(areaOf).find(a => a && a !== '—') || '' };
+  });
+  return { C, L, rpOrders: C.cur.filter(x => x._n > 1).length };
+}
+function repOpen(sel) { RC.sel = sel || ''; repDraw() }
+function repDraw() {
+  const { C, L, rpOrders } = rcData(), q = RC.q.toLowerCase();
+  const per = perLabel(C.R);
+  let html;
+  if (RC.sel) {
+    const c = L.find(x => x.k === RC.sel) || (() => { const O = ordDS().rows.filter(x => x._c === RC.sel); return O.length ? { k: RC.sel, name: v2n(O[O.length - 1].name), phone: O[0].contact, O, V: O.filter(x => x._ok), vs: [], spent: sum(O.filter(isDone), amtOf), area: areaOf(O[O.length - 1]) } : null })();
+    if (!c) { RC.sel = ''; return repDraw() }
+    const cx = c.O.length - c.V.length, models = [...new Set(c.V.map(x => v2n(x.model)).filter(Boolean))];
+    const stat = (l, v) => `<div class="rcs"><small>${l}</small><b>${v}</b></div>`;
+    const tm = x => +x.ts ? ' · ' + new Date(+x.ts).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' }) : '';
+    const ord = n => n + (n % 100 > 10 && n % 100 < 14 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
+    html = `<div class="rch"><button class="rcbk" onclick="RC.sel='';repDraw()" aria-label="Back">‹</button><div style="flex:1;min-width:0">${av(c.name)}<div class="rcn"><b>${esc(c.name)}</b><small class="mu">${esc(c.phone)}${c.area ? ' · ' + esc(c.area) : ''}</small></div></div><button class="x" onclick="closeAll()" style="color:var(--mu)">✕</button></div>
+      <div class="rcg">${stat('Orders', `${c.V.length}${cx ? ` <small class="mu">+${cx} cancelled</small>` : ''}`)}${stat('Spent', c.spent ? inr(c.spent) : '—')}${stat('Customer since', c.V[0] ? fd(c.V[0].date) : '—')}${stat('Last order', fd(c.O[c.O.length - 1].date))}</div>
+      ${models.length ? `<div class="mu" style="font-size:12.5px;margin:2px 0 12px">Vehicles: ${models.map(esc).join(', ')}</div>` : ''}
+      <div style="margin:6px 0 8px;font-weight:600;font-size:14px">Order history <span class="mu" style="font-weight:500;font-size:12.5px">· newest first</span></div>
+      <div class="rtl">${[...c.O].reverse().map(x => { const inP = x.date >= C.R.a && x.date <= C.R.b, w = vehOf(x);
+        return `<div class="rti ${x._ok ? '' : 'off'}"><i class="${x._ok ? (/complet/i.test(x.status || '') ? 'ok' : 'op') : 'bad'}"></i><div class="rtb"><div class="row" style="margin:0;justify-content:space-between;gap:8px"><b>${fd(x.date)}<span class="mu" style="font-weight:500">${tm(x)}</span></b><span>${amtOf(x) ? `<b>${inr(amtOf(x))}</b>` : ''}</span></div>
+          <div class="rit">${esc(v2n(x.items)) || '<span class="mu">—</span>'}</div>
+          <div class="row" style="margin:4px 0 0;gap:6px;flex-wrap:wrap">${x._ok ? `<span class="chip ${x._n > 1 ? 'rep' : 'nw'}">${x._n > 1 ? '↻ ' + ord(x._n) : '1st order'}</span>` : ''}<span class="chip ${x._ok ? '' : 'bad'}" style="${x._ok ? '' : 'color:var(--bad)'}">${esc(window.stLabel ? stLabel(x) : x.status || '—')}</span>${w ? `<span class="chip ${w === '4W' ? 'v4' : 'v2'}">${w}</span>` : ''}${x.model ? `<span class="chip">${esc(v2n(x.model))}</span>` : ''}${inP ? '<span class="chip" style="background:var(--ink);color:var(--s1)">in period</span>' : ''}</div></div></div>` }).join('')}</div>`;
+  } else {
+    let R = L.filter(c => (RC.vh === 'all' || c.vs.includes(RC.vh)) && (!q || [c.name, c.phone, c.area].some(v => String(v).toLowerCase().includes(q))));
+    R.sort(RC.sort === 'recent' ? (a, b) => b.last.localeCompare(a.last) : RC.sort === 'spent' ? (a, b) => b.spent - a.spent : (a, b) => b.V.length - a.V.length || b.last.localeCompare(a.last));
+    const seg = (k, opts) => `<div class="pseg">${opts.map(([v, l]) => `<button class="${RC[k] === v ? 'on' : ''}" onclick="RC.${k}='${v}';repDraw()">${l}</button>`).join('')}</div>`;
+    const vc = v => v === 'all' ? L.length : L.filter(c => c.vs.includes(v)).length;
+    html = `<div class="rch"><div style="flex:1"><b style="font-size:19px">Repeat customers</b><div class="mu" style="font-size:12.5px;margin-top:2px">${per} · ${fd(C.R.a)} – ${fd(C.R.b)}</div></div><button class="x" onclick="closeAll()" style="color:var(--mu)">✕</button></div>
+      <div class="rcg">${[['Repeat customers', fmtN(L.length)], ['Repeat orders', fmtN(rpOrders)], ['Avg orders each', L.length ? (sum(L, c => c.V.length) / L.length).toFixed(1) : '—'], ['Their spend', inr(sum(L, c => c.spent))]].map(([l, v]) => `<div class="rcs"><small>${l}</small><b>${v}</b></div>`).join('')}</div>
+      <div class="row" style="margin:0 0 10px;gap:8px;flex-wrap:wrap">${seg('vh', [['all', `All ${vc('all')}`], ['2W', `2W ${vc('2W')}`], ['4W', `4W ${vc('4W')}`]])}${seg('sort', [['orders', 'Most orders'], ['recent', 'Latest'], ['spent', 'Top spend']])}</div>
+      <input id="rc_q" class="srch" style="max-width:none;width:100%;margin:0 0 10px" placeholder="Search name, phone, area…" value="${esc(RC.q)}" oninput="RC.q=this.value;repDraw();const e=document.getElementById('rc_q');e.focus();e.setSelectionRange(e.value.length,e.value.length)">
+      <div class="rcl">${R.slice(0, 200).map(c => `<button class="rcr" onclick="repOpen(dec('${enc(c.k)}'))">${av(c.name)}<span class="rcn"><b>${esc(c.name)}</b><small class="mu">${esc(c.phone)}${c.area ? ' · ' + esc(c.area) : ''}</small></span><span class="rcm">${c.vs.map(v => `<span class="chip ${v === '4W' ? 'v4' : 'v2'}">${v}</span>`).join('')}<span class="rco"><b>${c.V.length}</b><small>orders</small></span><span class="rco"><b>${c.spent ? inr(c.spent) : '—'}</b><small>last ${fd(c.last)}</small></span><span class="mu" style="font-size:18px">›</span></span></button>`).join('') || '<div class="mu" style="padding:18px 4px">No repeat customers in this period.</div>'}</div>
+      ${R.length > 200 ? `<p class="mu" style="font-size:12px">Showing 200 of ${R.length}. Search to find others.</p>` : ''}
+      <p class="mu" style="font-size:12px;margin-top:10px">Repeat customer = placed a 2nd (or later) valid order in this period. Orders and spend are all-time; spend counts completed orders.</p>`;
+  }
+  const keep = $('#drw .dr') ? $('#drw .dr').scrollTop : 0, same = $('#drw .rcwrap') && $('#drw .rcwrap').dataset.sel === RC.sel;
+  $('#drw').innerHTML = `<div class="ov r" onclick="closeAll()"><div class="bx dr rcwrap" data-sel="${esc(RC.sel)}" onclick="event.stopPropagation()" style="max-width:600px;${same ? 'animation:none' : ''}">${html}</div></div>`;
+  if (same) $('#drw .dr').scrollTop = keep;
+}
+(function () {
+  const st = document.createElement('style');
+  st.textContent = `.rch{display:flex;align-items:center;gap:10px;margin-bottom:14px}.rch .av{float:left;margin-right:10px;width:38px;height:38px;font-size:13px}.rch .rcn{display:flex;flex-direction:column}.rch .rcn b{font-size:18px}
+.rcbk{width:34px;height:34px;border-radius:10px;border:1px solid var(--bd);background:var(--s2);color:var(--tx);font-size:20px;line-height:1;cursor:pointer;flex:none}
+.rcg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}.rcs{background:var(--s2);border:1px solid var(--bd);border-radius:12px;padding:9px 11px}.rcs small{display:block;color:var(--mu);font-size:11.5px}.rcs b{font-size:17px;font-weight:700;letter-spacing:-.01em}.rcs b small{display:inline;font-size:11px;font-weight:500}
+.rcl{display:flex;flex-direction:column;border:1px solid var(--bd);border-radius:14px;overflow:hidden}
+.rcr{display:flex;align-items:center;gap:10px;padding:11px 12px;border:0;border-bottom:1px solid var(--bd);background:var(--s1);color:var(--tx);font:inherit;text-align:left;cursor:pointer;width:100%}.rcr:last-child{border-bottom:0}.rcr:hover{background:var(--s2)}
+.rcr .rcn{flex:1;min-width:0;display:flex;flex-direction:column}.rcr .rcn b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rcr .rcn small{font-size:12px}
+.rcm{display:flex;align-items:center;gap:10px;flex:none}.rco{display:flex;flex-direction:column;align-items:flex-end;min-width:54px}.rco b{font-size:14px}.rco small{font-size:11px;color:var(--mu)}
+.rtl{position:relative;padding-left:18px}.rtl:before{content:'';position:absolute;left:5px;top:6px;bottom:6px;width:2px;background:var(--bd)}
+.rti{position:relative;margin-bottom:10px}.rti>i{position:absolute;left:-18px;top:14px;width:12px;height:12px;border-radius:50%;border:2px solid var(--s1)}.rti>i.ok{background:var(--ok,#1F8A4C)}.rti>i.op{background:var(--c1)}.rti>i.bad{background:var(--bad)}
+.rtb{border:1px solid var(--bd);border-radius:12px;padding:10px 12px;background:var(--s1)}.rti.off .rtb{opacity:.6}.rit{font-size:13.5px;margin-top:3px}
+@media(max-width:600px){.rcg{grid-template-columns:repeat(2,1fr)}.rco:last-of-type small{display:none}.rcm .chip{display:none}}`;
+  document.head.appendChild(st);
+})();
