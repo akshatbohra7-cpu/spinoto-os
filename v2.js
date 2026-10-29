@@ -222,10 +222,12 @@ function vHome2() {
   })();
   const G = growthDS(), gCur = inR(G.rows, R.a, R.b), st = [...S.store].sort((a, b) => a.date < b.date ? -1 : 1).pop();
   const cp = S.content.filter(x => !['Idea', 'Live'].includes(x.stage)).length, cs = S.content.filter(x => x.stage === 'Scheduled' && x.due && x.due <= addDays(t, 7)).length, cl2 = S.content.filter(x => x.stage === 'Live' && (x.due || x.created || '') >= R.a).length;
-  const seg = [['td', 'Today'], ['7d', '7D'], ['mtd', 'Month'], ['90d', '90D']];
   const sync = S.settings.find(x => x.id === 'sync');
   return `<div class="v2h"><div><div class="sub">${new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}${sync && sync.at ? ' · orders synced ' + relTime(sync.at) : ''}</div><h1 class="h1" style="margin:4px 0 0">${perLabel(R)}</h1></div>
-    <div class="row" style="margin:0"><div class="pseg">${seg.map(([k, l]) => `<button class="${EX.per === k ? 'on' : ''}" onclick="exPer('${k}')">${l}</button>`).join('')}</div>${canTab('ads') === 'edit' ? '<button class="btn" onclick="openLog()">+ Log ads</button>' : ''}</div></div>
+    <div class="row" style="margin:0">${canTab('ads') === 'edit' ? '<button class="btn" onclick="openLog()">+ Log ads</button>' : ''}</div></div>
+  <div class="xbar"><div class="xrow"><div class="pseg">${PER.map(([k, l]) => `<button class="${EX.per === k ? 'on' : ''}" onclick="exPer('${k}')">${l}</button>`).join('')}</div>
+    ${EX.per === 'custom' ? `<span class="cd"><input type="date" id="x_from" value="${R.a}" onchange="exDate()"> → <input type="date" id="x_to" value="${R.b}" onchange="exDate()"></span>` : ''}
+    <span class="rl">${R.all ? 'All data' : fd(R.a) + ' – ' + fd(R.b)} ${R.all ? '' : `<small>vs ${fd(R.pa)} – ${fd(R.pb)}</small>`}</span></div></div>
   <h2 class="sec">The numbers <span>· vs the previous ${R.n} day${R.n > 1 ? 's' : ''}</span></h2><div class="kpis">${kpis}</div>
   <div class="row2">
     <section class="c f3"><div class="hd"><h2>Orders by ${R.n === 1 || OV === 'slot' ? 'time of day' : R.n <= 14 ? 'day' : R.n <= 62 ? 'week' : 'month'}</h2>${R.n > 1 ? ovSeg() : ''}</div><div class="lgd" style="margin:-2px 0 8px"><span><i class="c2w"></i>2-wheeler</span><span><i class="c4w"></i>4-wheeler</span></div>
