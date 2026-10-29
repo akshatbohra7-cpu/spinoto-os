@@ -10,13 +10,13 @@ const V2I = {
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2'
 };
 const v2ico = (k, s = 17) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${V2I[k] || V2I.home}"/></svg>`;
-const NAVG = [['', [['home', 'Today'], ['analytics', 'Analytics']]], ['Channels', [['ads', 'Ads'], ['wa', 'WhatsApp'], ['content', 'Content'], ['creatives', 'Creatives']]], ['Business', [['orders', 'Orders'], ['areas', 'Areas'], ['money', 'Wallet & spend'], ['lab', 'Experiments'], ['growth', 'App growth']]], ['Admin', [['team', 'People & access'], ['data', 'Settings']]]];
+const NAVG = [['', [['home', 'Home'], ['analytics', 'Analytics']]], ['Channels', [['ads', 'Ads'], ['wa', 'WhatsApp'], ['content', 'Content'], ['creatives', 'Creatives']]], ['Business', [['orders', 'Orders'], ['areas', 'Areas'], ['money', 'Wallet & spend'], ['lab', 'Experiments'], ['growth', 'App growth']]], ['Admin', [['team', 'People & access'], ['data', 'Settings']]]];
 function navHTML() {
   const ok = k => k === 'team' ? isSuper() : canTab(k) !== 'none';
   return `<div class="brand"><i>S</i><b>spinoto<span>.os</span></b></div><button class="jump" onclick="openPal()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>Jump to…</span><kbd>⌘K</kbd></button>` +
     NAVG.map(([g, it]) => { const L = it.filter(([k]) => ok(k)); return L.length ? `<div class="grp">${g ? `<div class="gl">${g}</div>` : ''}${L.map(([k, n]) => `<button class="n ${k === tab ? 'on' : ''}" onclick="go('${k}')">${v2ico(k)}<span>${n}</span></button>`).join('')}</div>` : '' }).join('') +
     `<div class="live ${window.LIVE && !LIVE.ok ? 'off' : ''}" title="${window.LIVE && !LIVE.ok ? 'Connection lost — reconnecting. Data will catch up automatically.' : 'Live — new orders and changes appear automatically'}"><i></i>${window.LIVE && !LIVE.ok ? 'Reconnecting…' : 'Live'}</div>` +
-    (ME ? `<button class="me" onclick="meMenu()"><span class="ini">${esc((ME.name || ME.email).slice(0, 2).toUpperCase())}</span><span><b style="font-size:13px;font-weight:600">${esc((ME.name || ME.email).split(' ')[0])}</b><small>${esc(roleLabel(ME.role))}</small></span></button>` : '');
+    (ME ? `<button class="me" onclick="meMenu()"><span class="ini">${esc((ME.name || ME.email).slice(0, 2).toUpperCase())}</span><span class="who"><b>${esc((ME.name || ME.email.split('@')[0]).split(' ')[0])}</b><small>${esc(roleLabel(ME.role))}</small></span><svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 9l4-4 4 4M16 15l-4 4-4-4"/></svg></button>` : '');
 }
 
 // ---------- shared helpers ----------
