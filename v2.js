@@ -36,9 +36,10 @@ function v2delta(c, p, good) { // good: 1 higher is better, 0 lower is better, 2
 }
 function spendIn(a, b, M) {
   const E = ECD(), ads = sum(M.rows.filter(x => x.date >= a && x.date <= b), x => x.dSpend) * (1 + GST);
-  const wa = (window.W && W.loaded) ? W.camps.filter(c => c.date >= a && c.date <= b && c.status !== 'Cancelled').reduce((s, c) => s + waCost(c), 0) : 0;
-  const ex = S.expenses.filter(x => x.date && String(x.date).slice(0, 10) >= a && String(x.date).slice(0, 10) <= b);
-  const pr = sum(ex.filter(x => x.type === 'PR'), x => +x.amount || 0), other = sum(ex.filter(x => x.type !== 'PR'), x => +x.amount || 0);
+  // WhatsApp = the wallet top-ups you record in Wallet & spend (Interakt / WhatsApp API), NOT messages × cost — so nothing is counted twice.
+  const ex = S.expenses.filter(x => x.date && String(x.date).slice(0, 10) >= a && String(x.date).slice(0, 10) <= b), isWA = x => /whats\s*app|whatsap|whatspp|interakt|interact/i.test((x.desc || '') + ' ' + (x.category || ''));
+  const wa = sum(ex.filter(isWA), x => +x.amount || 0);
+  const pr = sum(ex.filter(x => x.type === 'PR' && !isWA(x)), x => +x.amount || 0), other = sum(ex.filter(x => x.type !== 'PR' && !isWA(x)), x => +x.amount || 0);
   const parts = { ads, wa, pr, other }, total = Object.keys(parts).reduce((s, k) => s + (E.inc[k] ? parts[k] : 0), 0);
   return { ...parts, total };
 }
@@ -186,7 +187,7 @@ function vHome2() {
   const E = ECD(), cacC = nw(cur) ? sC.total / nw(cur) : 0, cacP = prev && nw(prev) ? sP.total / nw(prev) : null;
   const iC = inst(aC), iP = aP ? inst(aP) : null;
   const card = (tb, icon, label, value, d, note, dark) => `<button class="kp2 ${dark ? 'dark' : ''}" onclick="${tb.startsWith('fn:') ? tb.slice(3) : tb.startsWith('lens:') ? `goLens('${tb.slice(5)}')` : `go('${tb}')`}"><span class="kh"><span class="ki">${v2ico(icon, 16)}</span>${label}</span><b>${value}</b><span class="kd ${d[1]}">${d[0] || '&nbsp;'}</span><span class="kn">${note}</span></button>`;
-  const incl = ['ads', 'wa', 'pr', 'other'].filter(k => E.inc[k]).map(k => ({ ads: 'ads incl. GST', wa: 'WhatsApp', pr: 'PR', other: 'other costs' })[k]).join(', ');
+  const incl = ['ads', 'wa', 'pr', 'other'].filter(k => E.inc[k]).map(k => ({ ads: 'ads incl. GST', wa: 'WhatsApp top-ups', pr: 'PR', other: 'other costs' })[k]).join(', ');
   const cacD = cacP ? [(cacC <= cacP ? '▼ ' : '▲ ') + inr(Math.abs(cacC - cacP)), cacC <= cacP ? 'up' : 'dn'] : ['', 'ne'];
   // Revenue = order Total of COMPLETED orders (by order date). Open orders shown separately; cancelled / failed never count.
   const done = r => r.filter(x => /complet/i.test(x.status || '') && amtOf(x) > 0), rev = r => sum(done(r), amtOf);
@@ -420,7 +421,7 @@ function vEcon(M, O) {
     <section class="c f3"><div class="hd"><h2>CAC by channel</h2>${tgt ? `<span class="mu" style="font-size:12px">Orange line = ${inr(tgt)} target</span>` : ''}</div>
       ${hasSrc ? chans.map(x => `<div class="lr" style="grid-template-columns:130px minmax(0,1fr) 70px;min-height:38px"><span>${x.n} <small class="mu">· ${x.c}</small></span><span style="position:relative;height:20px;border-radius:6px;background:var(--s2)"><span style="position:absolute;left:0;top:0;bottom:0;border-radius:6px;width:${x.cac === null ? 0 : (x.cac / cmx * 100).toFixed(1)}%;background:${tgt && x.cac > tgt ? 'var(--ac)' : 'var(--ink)'}"></span>${tgt ? `<span style="position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ac);left:${(tgt / cmx * 100).toFixed(1)}%"></span>` : ''}</span><b class="mono" style="text-align:right">${x.cac === null ? '—' : inr(x.cac)}</b></div>`).join('') : `<div class="empty">CAC per channel needs an order <b>source</b> (Meta, Google, WhatsApp, Referral…). It fills in once the Google Sheet sends a source column, or when you pick one on an order.</div>`}</section>
     <section class="c f2"><div class="hd"><h2>How CAC is counted</h2></div><div class="mono" style="padding:12px 14px;border-radius:10px;background:var(--s2);font-size:12.5px;line-height:1.5;margin-bottom:8px">CAC = ticked costs<br>÷ customers whose first-ever order is in the period</div>
-      ${tog('ads', 'Ad spend (incl. 18% GST)', sp.ads)}${tog('wa', 'WhatsApp messages', sp.wa)}${tog('pr', 'Influencer & PR', sp.pr)}${tog('other', 'Other marketing costs', sp.other)}
+      ${tog('ads', 'Ad spend (incl. 18% GST)', sp.ads)}${tog('wa', 'WhatsApp wallet top-ups (Interakt)', sp.wa)}${tog('pr', 'Influencer & PR', sp.pr)}${tog('other', 'Other marketing costs', sp.other)}
       <div class="f" style="grid-template-columns:1fr 1fr;margin-top:10px"><div><label>Our commission %</label><input id="ec_comm" type="number" step="0.1" value="${esc(E.comm)}" ${ed ? '' : 'disabled'} onchange="econSet({comm:this.value})"></div><div><label>Target CAC ₹</label><input id="ec_tgt" type="number" value="${esc(E.target)}" ${ed ? '' : 'disabled'} onchange="econSet({target:this.value})"></div></div></section>
   </div>
   <section class="c" style="margin-top:16px"><div class="hd"><h2>Do customers come back?</h2><span class="mu" style="font-size:12px">% ordering again, by month of first order</span></div>${cohortTable(O)}</section>`;
