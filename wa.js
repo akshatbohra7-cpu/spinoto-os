@@ -73,7 +73,8 @@ async function waLoad() {
     W.camps = c.sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : (a.created_at < b.created_at ? 1 : -1));
     W.counts = {}; n.data.forEach(x => W.counts[x.campaign_id] = x);
     W.sum = s.data; W.opt = o.data; W.optN = oc.count || 0; W.loaded = true; W.aud = null;
-  } catch (e) { msg('WhatsApp data: ' + (e.message || e.code)) }
+    W.err = '';
+  } catch (e) { W.err = (e.message || e.code || 'error'); msg('WhatsApp data: ' + W.err) }
   W.loading = false; render();
 }
 function waEnter() { if (!W.date) W.date = today(); waLive(); waLoad() }
@@ -92,7 +93,7 @@ const waCost = c => { const cpm = c.cost_per_msg ?? WS().cpm; return cpm ? waSen
 // ---------- view ----------
 function vWA() {
   if (!waSB()) return `<div class="top"><h1>WhatsApp</h1></div><div class="c mu">Needs the Supabase connection (works on the live site).</div>`;
-  if (!W.loaded) { if (!W.loading) setTimeout(waEnter, 0); return `<div class="top"><h1>WhatsApp</h1></div><div class="c mu">Loading…</div>` }
+  if (!W.loaded) { if (W.err && !W.loading) return `<div class="top"><h1>WhatsApp</h1></div><div class="c"><b>Couldn't load WhatsApp data.</b><div class="mu" style="font-size:12.5px;margin:4px 0 10px">${esc(W.err)}</div><button class="btn sm" onclick="W.err='';waEnter()">Try again</button></div>`; if (!W.loading) setTimeout(waEnter, 0); return `<div class="top"><h1>WhatsApp</h1></div><div class="c mu">Loading…</div>` }
   const subs = [['check', 'Check & Send'], ['camps', 'Campaigns'], ['aud', 'Audiences'], ['over', 'Overview'], ['opt', 'Opt-outs'], ['set', 'Settings']];
   const await_ = W.camps.filter(c => c.status === 'Sent').length;
   return `<div class="top"><div><h1>WhatsApp</h1><span class="mu">${nfmt(W.sum?.total)} messages logged · ${W.camps.length} campaigns${await_ ? ` · <b style="color:var(--warn)">${await_} awaiting results</b>` : ''}</span></div>
