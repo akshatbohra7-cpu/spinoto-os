@@ -178,7 +178,6 @@ function statusPanel(a, b) {
 // ---------- TODAY ----------
 function vHome2() {
   const M = model(); SM = M; const O = ordersAll(), R = exRange(O.length ? O : M.rows), t = today();
-  if (window.W && !W.loaded && !W.loading && canTab('wa') !== 'none' && window.waLoad) setTimeout(waLoad, 0);
   const cur = inR(O, R.a, R.b), prev = R.all ? null : inR(O, R.pa, R.pb);
   const ads = (a, b) => M.rows.filter(x => x.date >= a && x.date <= b), inst = r => sum(r.filter(x => x.cat === 'Install'), x => x.dRes), instSp = r => sum(r.filter(x => x.cat === 'Install'), x => x.dSpend);
   const aC = ads(R.a, R.b), aP = R.all ? null : ads(R.pa, R.pb);
@@ -215,12 +214,6 @@ function vHome2() {
   // items, ads, wa, growth
   const items = topN(cur, x => v2n(x.items), 5), imx = items.length ? items[0][1] : 1;
   const adl = M.ads.filter(a => a.sp7 > 0).slice(0, 4).map(a => { const p = a.v === 'Scale' ? 'ok' : a.v === 'Cut' ? 'bad' : a.fat ? 'warn' : ''; return `<div class="lr" style="grid-template-columns:minmax(0,1fr) auto;min-height:48px"><span style="min-width:0;line-height:1.25"><b style="display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.name)}</b><small class="mu">${a.res7 ? c1(a.cost) + ' / result · ' : ''}${inr(a.sp7)}</small></span><span class="pill ${p}">${a.fat && a.v === 'Hold' ? 'Refresh' : a.v}</span></div>` }).join('');
-  const waBox = (() => {
-    if (!(window.W && W.loaded)) return '<div class="empty">Loading…</div>';
-    const c = W.camps.find(x => x.status === 'Sent' || x.status === 'Results Logged'); if (!c) return '<div class="empty">No campaign sent yet.</div>';
-    const s = waSent(c), b = (l, v, d) => `<div class="lr" style="grid-template-columns:84px minmax(0,1fr) 54px;min-height:30px;border:0"><span>${l}</span><span class="sbar"><span style="width:${Math.min(100, d ? v / d * 100 : 0).toFixed(1)}%;background:var(--ink)"></span></span><b class="mono" style="text-align:right;font-size:12px">${d ? (v / d * 100).toFixed(v / d < .1 ? 1 : 0) + '%' : '—'}</b></div>`;
-    return `<div class="mu" style="font-size:12px;margin:-4px 0 10px">Last: ${esc(c.name)} · ${fd(c.date)} · ${fmtN(s)} sent</div>` + (c.delivered != null ? b('Delivered', +c.delivered, s) + b('Read', +c.read || 0, +c.delivered) + b('Clicked', +c.clicks || 0, +c.delivered) + b('Ordered', +c.orders || 0, +c.delivered) : `<div class="empty">Results not filled yet. <button class="lnk" onclick="go('wa')">Add results</button></div>`);
-  })();
   const G = growthDS(), gCur = inR(G.rows, R.a, R.b), st = [...S.store].sort((a, b) => a.date < b.date ? -1 : 1).pop();
   const cp = S.content.filter(x => !['Idea', 'Live'].includes(x.stage)).length, cs = S.content.filter(x => x.stage === 'Scheduled' && x.due && x.due <= addDays(t, 7)).length, cl2 = S.content.filter(x => x.stage === 'Live' && (x.due || x.created || '') >= R.a).length;
   const sync = S.settings.find(x => x.id === 'sync');
@@ -244,7 +237,6 @@ function vHome2() {
     ${canTab('ads') !== 'none' ? `<section class="c"><div class="hd"><h2>Ads · last 7 days</h2><button class="lnk" onclick="go('ads')">Ads →</button></div>${adl || '<div class="empty">No ad spend in the last 7 days.</div>'}</section>` : ''}
   </div>
   <div class="g3" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
-    ${canTab('wa') !== 'none' ? `<section class="c"><div class="hd"><h2>WhatsApp</h2><button class="lnk" onclick="go('wa')">Campaigns →</button></div>${waBox}</section>` : ''}
     <section class="c"><div class="hd"><h2>App users</h2></div><div class="row" style="margin:0;align-items:baseline"><b class="big2" style="font-size:26px">${G.last ? fmtN(G.last.total) : '—'}</b>${gCur.length ? `<span class="kd up" style="font-size:12px">+${fmtN(sum(gCur, x => x.n))} this period</span>` : ''}</div><div class="mu" style="font-size:12px;margin-top:6px">${st ? `Android ${st.andR || '—'} ★ (${fmtN(st.andC || 0)}) · iOS ${st.iosR || '—'} ★ (${fmtN(st.iosC || 0)})` : 'Log store ratings in App growth'}</div></section>
     ${canTab('content') !== 'none' ? `<section class="c"><div class="hd"><h2>Content pipeline</h2><button class="lnk" onclick="go('content')">Board →</button></div><div class="stt" style="margin:0"><div><b>${cp}</b><small>in production</small></div><div><b>${cs}</b><small>scheduled this week</small></div><div><b>${cl2}</b><small>live this period</small></div></div></section>` : ''}
     ${canTab('money') !== 'none' ? `<section class="c"><div class="hd"><h2>Ad wallet</h2>${M.runway !== null ? `<b style="font-size:12px;color:${M.runway < 5 ? 'var(--bad)' : 'var(--mu)'}">Runs out ~${fd(addDays(t, Math.floor(M.runway)))}</b>` : ''}</div><div class="row" style="margin:0;align-items:baseline"><b class="big2" style="font-size:26px">${inr(M.bal)}</b><span class="mu" style="font-size:12px">left · ${inr(M.burn)}/day</span></div><div class="sbar" style="margin-top:8px"><span style="width:${M.funds ? cl(M.bal / M.funds * 100, 0, 100).toFixed(0) : 0}%;background:var(--ink)"></span></div></section>` : ''}
@@ -337,7 +329,9 @@ function vAnalytics() {
     ['services', 'wrench', 'Services sold', (topN(cur, x => v2n(x.items), 1)[0] || ['—'])[0]], ['areas', 'areas', 'Areas', new Set(cur.map(areaOf).filter(a => a !== '—')).size + ' areas'],
     ['days', 'clock', 'Days & times', wdTop], ['econ', 'cac', 'CAC & unit economics', nw ? inr(sp.total / nw) + ' per customer' : '—'],
     ['wa', 'wa', 'WhatsApp', (window.W && W.loaded && W.sum) ? fmtN(W.sum.total) + ' sent' : 'Campaigns'], ['repeat', 'repeat', 'Repeat customers', cur.filter(x => x._ok).length ? Math.round((cur.filter(x => x._ok).length - nw) / cur.filter(x => x._ok).length * 100) + '% of valid orders' : '—'],
-    ['spend', 'money', 'Spend', 'Ads, PR & other']
+    ['spend', 'money', 'Spend', 'Ads, PR & other'],
+    ['cancel', 'orders', 'Cancellations', cur.length ? Math.round(cur.filter(x => !x._ok).length / cur.length * 100) + '% cancelled / failed' : '—'],
+    ['signup', 'user', 'Signups → orders', SU.sum ? Math.round(SU.sum.conv * 100) + '% ordered' : 'Signups funnel']
   ].filter(([k]) => !((k === 'spend') && canTab('money') === 'none') && !(k === 'wa' && canTab('wa') === 'none') && !(k === 'ads' && canTab('ads') === 'none'));
   if (!L.find(x => x[0] === AN.lens)) AN.lens = 'orders';
   const body = ({
@@ -352,7 +346,9 @@ function vAnalytics() {
     econ: () => vEcon(M, O),
     wa: () => (window.W && W.loaded && window.waVOver) ? waVOver() : '<div class="c mu">Loading WhatsApp data…</div>',
     repeat: () => vRepeat(O),
-    spend: () => explore(moneyDS(M))
+    spend: () => explore(moneyDS(M)),
+    cancel: () => vCancel(),
+    signup: () => vSignup()
   }[AN.lens] || (() => ''))();
   return `<div class="v2h"><div><h1 class="h1" style="margin:0">Analytics</h1><div class="sub">Pick what to study. Period and filters carry across.</div></div></div>
   <div class="lens" role="tablist">${L.map(([k, ic, n, s]) => `<button role="tab" class="${AN.lens === k ? 'on' : ''}" onclick="AN.lens='${k}';try{localStorage.setItem('anlens','${k}')}catch(e){};renderNow()">${v2ico(ic, 18)}<b>${n}</b><small>${esc(s)}</small></button>`).join('')}</div>${body}`;
@@ -495,3 +491,74 @@ function repDraw() {
 @media(max-width:600px){.rcg{grid-template-columns:repeat(2,1fr)}.rco:last-of-type small{display:none}.rcm .chip{display:none}}`;
   document.head.appendChild(st);
 })();
+
+
+// ---------- CANCELLATIONS (Analytics lens) ----------
+// Uses the same period + filters as the rest of Analytics. Cancelled / failed = status contains cancel / fail.
+let CXL = { by: 'area' };
+function vCancel() {
+  const ds = ordDS(), C = exCtx(ds), cur = C.cur, cx = cur.filter(x => !x._ok), rate = cur.length ? cx.length / cur.length : 0;
+  const pr = C.prev && C.prev.length ? C.prev.filter(x => !x._ok).length / C.prev.length : null;
+  const later = (x, all) => all.some(y => y._c === x._c && y._ok && (y.date > x.date || (y.date === x.date && (+y.ts || +y.hour || 0) > (+x.ts || +x.hour || 0))));
+  const back = cx.filter(x => later(x, ds.rows)).length;
+  const prior = x => ds.rows.some(y => y._c === x._c && y._ok && y.date < x.date);
+  const dims = { area: ['Area', x => areaOf(x)], service: ['Service', x => v2n(x.items) || '—'], booking: ['Booking', x => v2n(x.booking) || '—'], vehicle: ['Vehicle', x => vehOf(x) || '—'], wd: ['Weekday', x => WD[new Date(x.date + 'T00:00:00').getDay()]], cust: ['New vs returning', x => (x._ok ? x._n > 1 : prior(x)) ? 'Returning customer' : 'First-time customer'] };
+  const grp = f => { const g = {}; cur.forEach(x => { const k = f(x) || '—', o = g[k] = g[k] || { n: 0, c: 0, v: 0 }; o.n++; if (!x._ok) { o.c++; o.v += amtOf(x) } }); return Object.entries(g).map(([k, o]) => ({ k, ...o, r: o.n ? o.c / o.n : 0 })) };
+  const k = (l, v, sub) => `<div class="kc2"><small>${l}</small><b>${v}</b><div class="kf"><span class="mu">${sub || '&nbsp;'}</span></div></div>`;
+  if (!cur.length) return `${exBar(ds)}<div class="c mu">No orders in this period.</div>`;
+  const slots = HOURS.map(([a, b, l]) => { const r = cur.filter(x => inSlot(x, a, b)), c = r.filter(x => !x._ok).length; return { l, n: r.length, c, tip: `${l}: ${c} of ${r.length} orders cancelled / failed`, segs: [{ v: r.length ? Math.round(c / r.length * 100) : 0, c: 'var(--bad)' }] } });
+  const ws = slots.filter(x => x.n >= 3).sort((a, b) => b.segs[0].v - a.segs[0].v)[0];
+  const top = (key) => grp(dims[key][1]).filter(x => x.n >= 5).sort((a, b) => b.r - a.r)[0];
+  const ins = [];
+  const ta = top('area'); if (ta) ins.push(['📍', `<b>${esc(ta.k)}</b> cancels most: ${Math.round(ta.r * 100)}% of ${ta.n} orders.`]);
+  const tsv = top('service'); if (tsv) ins.push(['🔧', `<b>${esc(tsv.k)}</b> has the highest cancel rate (${Math.round(tsv.r * 100)}% of ${tsv.n}).`]);
+  const tb = grp(dims.booking[1]).filter(x => x.n >= 5 && x.k !== '—').sort((a, b) => b.r - a.r); if (tb.length > 1) ins.push(['⏱', `<b>${esc(tb[0].k)}</b> bookings cancel ${Math.round(tb[0].r * 100)}% vs ${Math.round(tb[tb.length - 1].r * 100)}% for ${esc(tb[tb.length - 1].k)}.`]);
+  if (cx.length) ins.push(['↩', `${back} of ${cx.length} cancelled / failed orders were followed by a valid order from the same customer.`]);
+  const by = dims[CXL.by] ? CXL.by : 'area', G = grp(dims[by][1]).filter(x => x.c > 0 || x.n >= 3).sort((a, b) => b.c - a.c || b.r - a.r);
+  const row = x => `<tr><td class="nm">${esc(x.k)}</td><td>${fmtN(x.n)}</td><td><b>${fmtN(x.c)}</b></td><td style="min-width:120px"><div class="shb"><i style="width:${Math.max(2, x.r * 100).toFixed(1)}%;background:var(--bad)"></i></div><small class="mu">${Math.round(x.r * 100)}%</small></td><td>${x.v ? inr(x.v) : '—'}</td></tr>`;
+  return `${exBar(ds)}<div class="kgrid">${k('Cancel / fail rate', Math.round(rate * 100) + '%', pr !== null ? Math.round(pr * 100) + '% before' : '')}${k('Cancelled', fmtN(cx.filter(x => /cancel/i.test(x.status || '')).length), 'by customer or team')}${k('Failed', fmtN(cx.filter(x => /fail/i.test(x.status || '')).length), 'payment / system')}${k('Value lost', inr(sum(cx, amtOf)), 'order totals')}${k('Came back later', cx.length ? Math.round(back / cx.length * 100) + '%' : '—', back + ' followed by a valid order')}</div>
+  <div class="bento" style="margin-top:14px"><div class="s8"><div class="c"><div class="ct"><span>Cancel rate by time of day</span></div>${hasHour(cur) ? story(`${ws ? `Worst slot: <b>${ws.l}</b> (${ws.segs[0].v}%). ` : ''}Each bar = % of orders placed in that slot that got cancelled or failed.`) + colChart(slots, { fmtv: v => v + '%' }) : '<div class="mu">Order times aren’t available for this period.</div>'}</div></div>
+  <div class="s4"><div class="c ins"><div class="ct">What stands out</div>${ins.map(([i, t]) => `<div class="in1"><span>${i}</span><div>${t}</div></div>`).join('') || '<div class="mu">Not enough data yet.</div>'}</div></div></div>
+  <div class="c bk2" style="margin-top:14px"><div class="ct"><span>Break down by</span></div><div class="seg sm2 wrap">${Object.entries(dims).map(([kk, [l]]) => `<button class="${kk === by ? 'on' : ''}" onclick="CXL.by='${kk}';renderNow()">${l}</button>`).join('')}</div>
+  <div class="w" style="margin-top:10px"><table class="bt"><tr><th>${dims[by][0]}</th><th>Placed</th><th>Cancelled / failed</th><th>Cancel rate</th><th>Value lost</th></tr>${G.slice(0, 25).map(row).join('') || '<tr><td colspan="5" class="mu">No cancellations in this period</td></tr>'}</table></div>
+  <div class="mu" style="font-size:12px;margin-top:6px">${G.length > 25 ? `Top 25 of ${G.length}. ` : ''}Sorted by number of cancellations.</div></div>`;
+}
+
+// ---------- SIGNUPS → ORDERS (Analytics lens) ----------
+// Counting happens in the database (signup_funnel), so this stays fast at 20k+ or 2 lakh signups.
+let SU = { key: '', sum: null, loading: false, err: '', at: 0 };
+async function suLoad(a, b) {
+  const key = a + '|' + b; if (SU.loading || (SU.key === key && Date.now() - SU.at < 300000)) return;
+  SU.loading = true; SU.err = '';
+  const { data, error } = await window.SB.rpc('signup_funnel', { p_from: a, p_to: b });
+  SU.loading = false; SU.key = key; SU.at = Date.now();
+  if (error) { SU.err = error.message; SU.sum = null } else { SU.sum = data; SU.sum.conv = data.signups ? data.ordered / data.signups : 0 }
+  renderNow();
+}
+function vSignup() {
+  const ds = ordDS(), R = exRange(ds.rows), a = R.all ? '2000-01-01' : R.a, b = R.b;
+  if (!window.SB) return '<div class="c mu">Needs the live connection.</div>';
+  if (SU.key !== a + '|' + b) { setTimeout(() => suLoad(a, b), 0); return exBar(ds) + '<div class="c mu">Loading signups…</div>' }
+  if (Date.now() - SU.at > 300000) setTimeout(() => suLoad(a, b), 0); // refresh quietly every 5 min
+  if (SU.err) return exBar(ds) + `<div class="c"><b>Couldn't load signups.</b><div class="mu" style="font-size:12.5px;margin:4px 0 10px">${esc(SU.err)}</div><button class="btn sm" onclick="SU.key='';renderNow()">Try again</button></div>`;
+  const d = SU.sum || {};
+  if (!d.total) return exBar(ds) + `<div class="c"><b>Connect your Signups sheet</b><p class="mu" style="font-size:13px;margin:6px 0 0">This view needs signup dates. In the Signups sheet: Extensions → Apps Script → add the file <b>SpinotoOS_Signups</b> → run <b>startSignupsToOS</b> once. It copies all existing users, then keeps new signups flowing every 15 minutes.</p></div>`;
+  const k = (l, v, sub) => `<div class="kc2"><small>${l}</small><b>${v}</b><div class="kf"><span class="mu">${sub || '&nbsp;'}</span></div></div>`;
+  const pc = (x, y) => y ? Math.round(x / y * 100) + '%' : '—';
+  const t = today(), wk = (d.weeks || []).map(w => { const end = addDays(w.wk, 6), part = end >= addDays(t, -7); return { l: fd(w.wk), part, tip: `Signed up ${fd(w.wk)} – ${fd(end)}: ${fmtN(w.n)} people, ${fmtN(w.o7)} ordered within 7 days${part ? ' (still running)' : ''}`, segs: [{ v: w.n ? Math.round(w.o7 / w.n * 100) : 0, c: 'var(--c1)' }] } });
+  const steps = [['Signed up', d.signups], ['Ordered within 7 days', d.d7], ['Ordered at all', d.ordered], ['Ordered twice or more', d.twice]];
+  return `${exBar(ds)}<div class="kgrid">${k('Signups', fmtN(d.signups), 'joined in this period')}${k('Placed an order', fmtN(d.ordered), pc(d.ordered, d.signups) + ' of signups')}${k('Never ordered', fmtN(d.signups - d.ordered), 'the opportunity')}${k('Signup → 1st order', d.avg != null ? d.avg + 'd' : '—', 'average, for those who ordered')}${k('Ordered same day', fmtN(d.same), pc(d.same, d.signups) + ' of signups')}</div>
+  <div class="bento" style="margin-top:14px"><div class="s8"><div class="c"><div class="ct"><span>% who order within 7 days · by signup week</span></div>${wk.length ? story('Each bar is one week of signups (last 12 weeks). Higher = more of that week’s signups booked within 7 days. Lighter = that week’s 7 days aren’t over yet.') + colChart(wk, { fmtv: v => v + '%' }) : '<div class="mu">No signups in the last 12 weeks.</div>'}</div></div>
+  <div class="s4"><div class="c"><div class="ct">Funnel · this period</div>${steps.map(([l, v], i) => `<div class="row" style="justify-content:space-between;margin:0"><span>${l}</span><span><b>${fmtN(v || 0)}</b> <small class="mu">${i ? pc(v, d.signups) : ''}</small></span></div><div class="bar"><i style="width:${d.signups ? Math.max(1, (v || 0) / d.signups * 100) : 0}%"></i></div>`).join('')}</div>
+  ${canTab('wa') !== 'none' ? `<div class="c" style="margin-top:14px;border-color:var(--ac)"><div class="ct">Nudge list</div><b style="font-size:26px">${fmtN(d.nudge || 0)}</b><div class="mu" style="font-size:12.5px;margin:2px 0 10px">signed up 1–7 days ago, no order yet</div><button class="btn sm" ${d.nudge ? '' : 'disabled'} onclick="suNudge()">Send → Check & Send</button></div>` : ''}</div></div>
+  <div class="mu" style="font-size:12px;margin-top:8px">${fmtN(d.total)} signups in the OS · last one ${d.last ? new Date(d.last).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' }) : '—'}. Orders matched by phone number; cancelled / failed orders don’t count.</div>`;
+}
+async function suNudge() {
+  msg('Loading nudge list…');
+  let out = [], from = 0;
+  try {
+    for (; ;) { const { data, error } = await window.SB.rpc('signup_nudge').range(from, from + 999); if (error) throw error; out = out.concat(data); if (data.length < 1000) break; from += 1000 }
+    if (!out.length) return msg('Nobody to nudge right now');
+    if (window.waSendToCheck) waSendToCheck(out.map(r => r.phone + (r.name ? '\t' + r.name : '')).join('\n'));
+  } catch (e) { msg('Could not load: ' + (e.message || e.code)) }
+}

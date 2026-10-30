@@ -2,7 +2,7 @@
 // Data lives in Supabase tables wa_campaigns / wa_sends / wa_optouts (not the docs table),
 // so send history can grow to millions of rows without slowing the rest of the app.
 const WA_CATS = ['4W Service', '2W Service', 'Book a Mechanic', 'App Install', 'App Retarget', 'First Order Offer', 'Festive / Seasonal', 'Other'];
-const WA_STATUS = ['Planned', 'Sent', 'Results Logged', 'Cancelled'];
+const WA_STATUS = ['Planned', 'Sent', 'Cancelled'];
 const WA_REASONS = ['Replied STOP', 'Blocked / Reported', 'Asked not to message', 'Wrong number', 'Not on WhatsApp', 'Other'];
 const WA_SAFE = { 'New': 1, 'Gap OK': 1 };
 const WA_CHUNK = 500; // the database returns at most 1,000 rows per request — stay well under it
@@ -12,7 +12,7 @@ let W = { sub: 'check', camps: [], counts: {}, sum: null, opt: [], optN: 0, load
 try { W.sub = localStorage.getItem('wasub') || 'check' } catch (e) { }
 window.W = W;
 
-const WS = () => ({ gap: 5, cap: 4, cpm: 0, cc: 91, fb: 'Customer', ...(S.settings.find(x => x.id === 'wa') || {}) });
+const WS = () => ({ gap: 5, cap: 4, cpm: 0, cc: 91, win: 3, fb: 'Customer', ...(S.settings.find(x => x.id === 'wa') || {}) });
 const waSB = () => window.SB || null;
 const fmtD = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
 const nfmt = n => (n == null || n === '') ? '—' : Math.round(n).toLocaleString('en-IN');
@@ -72,11 +72,30 @@ async function waLoad() {
     for (const r of [n, s, o, oc]) if (r.error) throw r.error;
     W.camps = c.sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : (a.created_at < b.created_at ? 1 : -1));
     W.counts = {}; n.data.forEach(x => W.counts[x.campaign_id] = x);
-    W.sum = s.data; W.opt = o.data; W.optN = oc.count || 0; W.loaded = true; W.aud = null;
+    W.sum = s.data; W.opt = o.data; W.optN = oc.count || 0; W.aud = null;
+    W.attr = await waAttrLoad(); W.loaded = true;
+    if (W.pendingCheck) { W.pendingCheck = false; setTimeout(waCheck, 0) }
     W.err = '';
   } catch (e) { W.err = (e.message || e.code || 'error'); msg('WhatsApp data: ' + W.err) }
   W.loading = false; render();
 }
+// Orders that came after a WhatsApp message (latest message within the window before the order gets the credit).
+async function waAttrLoad() {
+  let out = [], from = 0;
+  for (; ;) {
+    const { data, error } = await waSB().rpc('wa_attribution', { p_days: +WS().win || 3 }).range(from, from + 999);
+    if (error) throw error; out = out.concat(data); if (data.length < 1000) break; from += 1000;
+  }
+  return out;
+}
+// Joins attribution rows with the full order (status, amount, items, new/repeat) already in memory.
+function waRes(filterCamp) {
+  const byId = {}; (window.ordDS ? ordDS().rows : []).forEach(o => byId[o.id] = o);
+  const L = (W.attr || []).filter(a => !filterCamp || a.campaign_id === filterCamp).map(a => ({ ...a, o: byId[a.order_id] })).filter(a => a.o && a.o._ok);
+  const done = L.filter(a => /complet/i.test(a.o.status || '') && amtOf(a.o) > 0);
+  return { L, orders: L.length, people: new Set(L.map(a => a.phone)).size, revenue: sum(done, a => amtOf(a.o)), newc: L.filter(a => a.o._n === 1).length, open: L.filter(a => !/complet/i.test(a.o.status || '')).length };
+}
+window.waRes = waRes;
 function waEnter() { if (!W.date) W.date = today(); waLive(); waLoad() }
 // Live: when anyone logs sends, edits a campaign or adds an opt-out, reload (batched). Waits while you're typing in the paste box.
 function waLive() {
@@ -95,8 +114,7 @@ function vWA() {
   if (!waSB()) return `<div class="top"><h1>WhatsApp</h1></div><div class="c mu">Needs the Supabase connection (works on the live site).</div>`;
   if (!W.loaded) { if (W.err && !W.loading) return `<div class="top"><h1>WhatsApp</h1></div><div class="c"><b>Couldn't load WhatsApp data.</b><div class="mu" style="font-size:12.5px;margin:4px 0 10px">${esc(W.err)}</div><button class="btn sm" onclick="W.err='';waEnter()">Try again</button></div>`; if (!W.loading) setTimeout(waEnter, 0); return `<div class="top"><h1>WhatsApp</h1></div><div class="c mu">Loading…</div>` }
   const subs = [['check', 'Check & Send'], ['camps', 'Campaigns'], ['aud', 'Audiences'], ['over', 'Overview'], ['opt', 'Opt-outs'], ['set', 'Settings']];
-  const await_ = W.camps.filter(c => c.status === 'Sent').length;
-  return `<div class="top"><div><h1>WhatsApp</h1><span class="mu">${nfmt(W.sum?.total)} messages logged · ${W.camps.length} campaigns${await_ ? ` · <b style="color:var(--warn)">${await_} awaiting results</b>` : ''}</span></div>
+  return `<div class="top"><div><h1>WhatsApp</h1><span class="mu">${nfmt(W.sum?.total)} messages logged · ${W.camps.length} campaigns · <b>${nfmt(waRes().orders)}</b> orders from WhatsApp</span></div>
   <div class="seg waseg">${subs.map(([k, n]) => `<button class="${W.sub === k ? 'on' : ''}" onclick="waSub('${k}')">${n}</button>`).join('')}</div></div>` +
     ({ check: waVCheck, camps: waVCamps, aud: waVAud, over: waVOver, opt: waVOpt, set: waVSet }[W.sub]());
 }
@@ -195,19 +213,35 @@ async function waLog() {
 
 // ---------- campaigns ----------
 function waVCamps() {
+  const win = +WS().win || 3;
   const rows = W.camps.map(c => {
-    const s = waSent(c), cost = waCost(c);
-    const chipc = { Planned: 'warn', Sent: '', 'Results Logged': 'ok', Cancelled: 'bad' }[c.status];
-    return `<tr style="cursor:pointer" onclick="waCampForm('${c.id}')"><td>${fmtD(c.date)}</td><td><b>${esc(c.name)}</b></td><td>${esc(c.category || '')}</td><td class="mu">${esc(c.audience || '')}</td><td><span class="chip ${chipc}">${c.status}</span></td><td>${nfmt(s)}</td><td>${nfmt(c.delivered)}</td><td>${c.delivered ? waPct(c.read || 0, c.delivered) : '—'}</td><td>${c.delivered ? waPct(c.clicks || 0, c.delivered) : '—'}</td><td>${nfmt(c.orders)}</td><td>${c.revenue ? inr(c.revenue) : '—'}</td><td>${cost && c.revenue ? (c.revenue / cost).toFixed(1) + 'x' : '—'}</td></tr>`;
+    const sn = waSent(c), r = waRes(c.id), cost = waCost(c);
+    const chipc = { Planned: 'warn', Sent: 'ok', 'Results Logged': 'ok', Cancelled: 'bad' }[c.status];
+    return `<tr style="cursor:pointer" onclick="waCampView('${c.id}')"><td>${fmtD(c.date)}</td><td><b>${esc(c.name)}</b><div class="mu" style="font-size:11.5px">${esc(c.audience || '')}</div></td><td><span class="chip ${chipc}">${c.status === 'Results Logged' ? 'Sent' : c.status}</span></td><td>${nfmt(sn)}</td><td><b>${r.people ? nfmt(r.people) : '—'}</b></td><td>${sn ? waPct(r.people, sn) : '—'}</td><td><b>${r.orders || '—'}</b></td><td>${r.revenue ? inr(r.revenue) : '—'}</td><td>${r.newc || '—'}</td><td class="mu">${cost ? inr(cost) : '—'}</td><td>${cost && r.revenue ? (r.revenue / cost).toFixed(1) + 'x' : '—'}</td></tr>`;
   });
-  return `<div class="row" style="justify-content:space-between;margin-bottom:10px"><span class="mu">Tap a campaign to edit it or fill its results (24–48 hrs after sending).</span><button class="btn" onclick="waCampForm()">+ New campaign</button></div>` +
-    tbl(['Date', 'Campaign', 'Category', 'Audience', 'Status', 'Sent', 'Delivered', 'Read %', 'Click %', 'Orders', 'Revenue', 'ROAS'], rows);
+  return `<div class="row" style="justify-content:space-between;margin-bottom:10px"><span class="mu">Orders are matched automatically: a customer you messaged who placed a valid order within ${win} day${win > 1 ? 's' : ''}. Tap a campaign to see who ordered.</span><button class="btn" onclick="waCampForm()">+ New campaign</button></div>` +
+    tbl(['Date', 'Campaign', 'Status', 'Sent', 'Ordered', 'Conversion', 'Orders', 'Revenue', 'New customers', 'Est. cost', 'Return'], rows);
+}
+// Campaign detail: results + every customer who ordered after it
+function waCampView(id) {
+  const c = W.camps.find(x => x.id === id); if (!c) return;
+  const sn = waSent(c), r = waRes(id), cost = waCost(c), win = +WS().win || 3;
+  const k = (l, v, sub) => `<div class="rcs"><small>${l}</small><b>${v}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
+  const L = [...r.L].sort((a, b) => b.o.date.localeCompare(a.o.date));
+  const ago = a => { const d = dayDiff(a.o.date, a.sent_on); return d <= 0 ? 'same day' : d + ' day' + (d > 1 ? 's' : '') + ' after' };
+  closeAll(); $('#drw').innerHTML = `<div class="ov r" onclick="closeAll()"><div class="bx dr" onclick="event.stopPropagation()" style="max-width:600px">
+  <div class="row" style="justify-content:space-between;align-items:flex-start"><div><b style="font-size:19px">${esc(c.name)}</b><div class="mu" style="font-size:12.5px;margin-top:2px">${fmtD(c.date)}${c.audience ? ' · ' + esc(c.audience) : ''}${c.offer ? ' · ' + esc(c.offer) : ''}</div></div><button class="x" onclick="closeAll()" style="color:var(--mu)">✕</button></div>
+  <div class="rcg" style="margin-top:14px">${k('Sent', nfmt(sn))}${k('Ordered', nfmt(r.people), sn ? waPct(r.people, sn) + ' of sent' : '')}${k('Orders', nfmt(r.orders), r.newc ? r.newc + ' new customers' : '')}${k('Revenue', r.revenue ? inr(r.revenue) : '—', cost ? 'cost ' + inr(cost) + (r.revenue ? ' · ' + (r.revenue / cost).toFixed(1) + 'x' : '') : '')}</div>
+  <div style="margin:6px 0 8px;font-weight:600;font-size:14px">Who ordered <span class="mu" style="font-weight:500;font-size:12.5px">· within ${win} day${win > 1 ? 's' : ''} of the message</span></div>
+  ${L.length ? `<div class="rcl">${L.map(a => { const o = a.o, w = vehOf(o); return `<div class="rcr" style="cursor:default">${av(o.name || '?')}<span class="rcn"><b>${esc(o.name || 'Unknown')}</b><small class="mu">${esc(a.phone)} · ${esc(v2n(o.items)) || '—'}</small></span><span class="rcm">${w ? `<span class="chip ${w === '4W' ? 'v4' : 'v2'}">${w}</span>` : ''}<span class="chip ${o._n === 1 ? 'nw' : 'rep'}">${o._n === 1 ? 'New' : '↻ Repeat'}</span><span class="rco"><b>${amtOf(o) ? inr(amtOf(o)) : '—'}</b><small>${fmtD(o.date)} · ${ago(a)}</small></span></span></div>` }).join('')}</div>` : `<div class="c mu" style="font-size:13px">No orders matched yet. Orders reach the OS within ~10 minutes; the window stays open ${win} days after sending.</div>`}
+  <div class="row" style="margin-top:16px"><button class="btn g" onclick="waCampForm('${id}')">Edit campaign</button></div>
+  </div></div>`;
 }
 function waCampForm(id) {
   const c = id ? W.camps.find(x => x.id === id) : { date: W.date || today(), status: 'Planned', category: '4W Service' };
   const aud = [...new Set(W.camps.map(x => x.audience).filter(Boolean))], tpl = [...new Set(W.camps.map(x => x.template).filter(Boolean))];
   const I = (k, l, t = 'text', extra = '') => `<div><label>${l}</label><input id="wc_${k}" type="${t}" value="${esc(c[k] ?? '')}" ${extra}></div>`;
-  const Sx = (k, l, opts) => `<div><label>${l}</label><select id="wc_${k}">${opts.map(o => `<option ${o === c[k] ? 'selected' : ''}>${o}</option>`).join('')}</select></div>`;
+  const Sx = (k, l, opts) => `<div><label>${l}</label><select id="wc_${k}">${opts.map(o => `<option ${o === (c[k] === 'Results Logged' ? 'Sent' : c[k]) ? 'selected' : ''}>${o}</option>`).join('')}</select></div>`;
   const sent = id ? waSent(c) : 0;
   closeAll(); $('#drw').innerHTML = `<div class="ov r" onclick="closeAll()"><div class="bx dr" onclick="event.stopPropagation()"><div class="row" style="justify-content:space-between"><b style="font-size:19px">${id ? 'Edit' : 'New'} campaign</b><button class="x" onclick="closeAll()" style="color:var(--mu)">✕</button></div>
   <div class="f" style="grid-template-columns:1fr 1fr;margin-top:14px">
@@ -217,7 +251,7 @@ function waCampForm(id) {
     ${I('audience', 'Audience', 'text', 'list="wa_aud" placeholder="Go Mechanic Data"')}${I('template', 'Template', 'text', 'list="wa_tpl"')}
     <div style="grid-column:1/-1"><label>Offer / coupon</label><input id="wc_offer" value="${esc(c.offer || '')}"></div>
   </div>
-  ${id ? `<h3 style="margin-top:18px">Results · sent ${nfmt(sent)}</h3><div class="f" style="grid-template-columns:1fr 1fr 1fr">${I('delivered', 'Delivered', 'number')}${I('read', 'Read', 'number')}${I('replies', 'Replies', 'number')}${I('clicks', 'Link clicks', 'number')}${I('bookings', 'Bookings / leads', 'number')}${I('orders', 'Orders', 'number')}${I('revenue', 'Revenue ₹', 'number')}${I('cost_per_msg', 'Cost / msg ₹', 'number', `step="0.01" placeholder="${WS().cpm || ''}"`)}</div>` : ''}
+  ${id ? `<div class="f" style="grid-template-columns:1fr 1fr;margin-top:10px">${I('cost_per_msg', 'Cost / msg ₹ (only for this campaign)', 'number', `step="0.01" placeholder="${WS().cpm || ''}"`)}<div class="mu" style="font-size:12px;align-self:end;padding-bottom:10px">Sent ${nfmt(sent)} · orders are counted automatically</div></div>` : ''}
   <div style="margin-top:10px"><label>Notes</label><input id="wc_notes" value="${esc(c.notes || '')}"></div>
   <datalist id="wa_aud">${aud.map(a => `<option>${esc(a)}</option>`).join('')}</datalist><datalist id="wa_tpl">${tpl.map(a => `<option>${esc(a)}</option>`).join('')}</datalist>
   <div class="row" style="margin-top:18px"><button class="btn" onclick="waCampSave('${id || ''}')">Save</button>
@@ -230,8 +264,7 @@ async function waCampSave(id) {
   const g = k => { const e = $('#wc_' + k); return e ? e.value.trim() : undefined }, num = k => { const v = g(k); return v === undefined ? undefined : v === '' ? null : +v };
   const d = { name: norm(g('name')), date: g('date') || today(), send_time: g('send_time') || null, category: g('category'), status: g('status'), audience: g('audience') || null, template: g('template') || null, offer: g('offer') || null, notes: g('notes') || null };
   if (!d.name) return msg('Campaign name required');
-  if (id) ['delivered', 'read', 'replies', 'clicks', 'bookings', 'orders', 'revenue', 'cost_per_msg'].forEach(k => d[k] = num(k));
-  if (id && d.status === 'Sent' && d.delivered != null) d.status = 'Results Logged';
+  if (id) { const v = num('cost_per_msg'); if (v !== undefined) d.cost_per_msg = v }
   const q = id ? waSB().from('wa_campaigns').update(d).eq('id', id).select() : waSB().from('wa_campaigns').insert(d).select();
   const { data, error } = await q;
   if (error) return msg(/duplicate|unique/i.test(error.message) ? 'A campaign with this name already exists' : 'Could not save: ' + error.message);
@@ -258,7 +291,57 @@ async function waAudPeople(a) {
   }
   return out;
 }
+// ---------- smart lists (win-back) ----------
+// Built from orders already in memory — refreshed every time orders change.
+function waSmartLists() {
+  if (!window.ordDS) return [];
+  const O = ordDS().rows, t = today(), by = {}, ago = d => dayDiff(t, d);
+  O.forEach(o => { if (o._c && /^\d{10}$/.test(o._c)) (by[o._c] = by[o._c] || []).push(o) });
+  const P = Object.values(by).map(L => {
+    const V = L.filter(x => x._ok), D = V.filter(x => /complet/i.test(x.status || '')), last = V[V.length - 1], lastD = D[D.length - 1], any = L[L.length - 1];
+    return { phone: any._c, name: [...L].reverse().map(x => waName(x.name)).find(Boolean) || '', V, last, lastD, veh: vehOf(last || any) };
+  });
+  return [
+    { k: 'lapsed', ic: '🕒', n: 'Lapsed 45+ days', rule: 'Ordered before, nothing in the last 45 days', L: P.filter(p => p.last && ago(p.last.date) >= 45) },
+    { k: 'due', ic: '🔧', n: 'Service due', rule: '2W: last service 90+ days ago · 4W: 120+ days', L: P.filter(p => p.lastD && ago(p.lastD.date) >= (p.veh === '4W' ? 120 : 90) && ago(p.last.date) >= 60) },
+    { k: 'cxl', ic: '✕', n: 'Cancelled, never ordered', rule: 'Tried to book, cancelled / failed, never came back', L: P.filter(p => !p.V.length) },
+    { k: 'once', ic: '1', n: 'One-time customers', rule: 'Exactly 1 order, 30+ days ago — nudge for the 2nd', L: P.filter(p => p.V.length === 1 && ago(p.last.date) >= 30) }
+  ];
+}
+function waVSmart() {
+  const S2 = waSmartLists(); if (!S2.length) return '';
+  const card = x => { const v2 = x.L.filter(p => p.veh === '2W').length, v4 = x.L.filter(p => p.veh === '4W').length;
+    return `<div class="c" style="display:flex;flex-direction:column;gap:10px"><div class="row" style="justify-content:space-between;margin:0;align-items:flex-start"><div style="min-width:0"><span style="display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--s2);font-size:14px;margin-bottom:6px">${x.ic}</span><b style="display:block;font-size:15.5px">${x.n}</b><div class="mu" style="font-size:12px;margin-top:2px">${x.rule}</div></div><div style="text-align:right;flex:none"><b style="font-size:26px;font-weight:800;letter-spacing:-.02em">${nfmt(x.L.length)}</b><div class="mu" style="font-size:11.5px">people</div></div></div>
+      <div class="row" style="margin:0;gap:6px;flex-wrap:wrap"><span class="chip v2">2W ${v2}</span><span class="chip v4">4W ${v4}</span></div>
+      <div class="row" style="margin:0;gap:8px;flex-wrap:wrap"><button class="btn sm" ${x.L.length ? '' : 'disabled'} onclick="waSmartDown('${x.k}')">⬇ Download</button><button class="btn g sm" ${x.L.length ? '' : 'disabled'} onclick="waSmartUse('${x.k}')">Send → Check & Send</button></div></div>` };
+  return `<div class="row" style="justify-content:space-between;margin:0 0 10px"><span class="mu">Smart lists · built automatically from your orders, always up to date</span></div>
+  <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(290px,1fr));margin-bottom:22px">${S2.map(card).join('')}</div>`;
+}
+async function waSmartDown(k) {
+  const x = waSmartLists().find(y => y.k === k); if (!x || !x.L.length) return; msg('Preparing ' + x.n + '…');
+  try {
+    const ph = x.L.map(p => p.phone), opted = new Set();
+    for (let i = 0; i < ph.length; i += WA_CHUNK) { const { data, error } = await waSB().rpc('wa_check', { p_phones: ph.slice(i, i + WA_CHUNK), p_date: today() }); if (error) throw error; data.forEach(d => { if (d.opted) opted.add(d.phone) }) }
+    const P = x.L.filter(p => !opted.has(p.phone)), cc = WS().cc, csvq = s => /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    window.SpinotoRuntime.browserDownload({ filename: `smart_${k}_${today()}.csv`, data: 'name,Phone Number,Country Code\n' + P.map(p => [csvq(p.name || ''), p.phone, cc].join(',')).join('\n') });
+    msg(`Downloaded ${P.length.toLocaleString('en-IN')} numbers${opted.size ? ` (${opted.size} opted-out removed)` : ''}`);
+  } catch (e) { msg('Download failed: ' + (e.message || e.code)) }
+}
+function waSmartUse(k) {
+  const x = waSmartLists().find(y => y.k === k); if (!x || !x.L.length) return;
+  waSendToCheck(x.L.map(p => p.phone + (p.name ? '\t' + p.name : '')).join('\n'));
+}
+// Used by smart lists and the signup nudge list: load numbers into Check & Send and run the check
+function waSendToCheck(raw) {
+  W.raw = raw; W.rows = null; W.logged = false; W.armed = ''; W.camp = ''; W.sub = 'check';
+  try { localStorage.setItem('wasub', 'check') } catch (e) { }
+  if (tab !== 'wa') { W.pendingCheck = true; go('wa') } else { render(); waCheck() }
+}
+window.waSendToCheck = waSendToCheck;
 function waVAud() {
+  return waVSmart() + waVAudSaved();
+}
+function waVAudSaved() {
   if (!W.aud) { if (!W.audLoading) setTimeout(waAudLoad, 0); return `<div class="c mu">Loading audiences…</div>` }
   if (!W.aud.length) return `<div class="c mu">No audiences yet. Give each campaign an <b>Audience</b> name (e.g. “K24 Gota”) and every number you mark as sent is saved under it.</div>`;
   const t = today(), tot = W.aud.reduce((a, x) => a + x.people, 0);
@@ -294,19 +377,18 @@ async function waAudUse(i) {
 
 // ---------- overview ----------
 function waVOver() {
-  const s = W.sum || {}, C = W.camps.filter(c => c.status !== 'Cancelled'), R = C.filter(c => c.delivered != null);
-  const tot = k => C.reduce((a, c) => a + (+c[k] || 0), 0), cost = C.reduce((a, c) => a + waCost(c), 0), rev = tot('revenue');
-  const fs = R.reduce((a, c) => a + waSent(c), 0), fd = R.reduce((a, c) => a + (+c.delivered || 0), 0);
-  const fun = [['Sent', fs], ['Delivered', fd], ['Read', R.reduce((a, c) => a + (+c.read || 0), 0)], ['Replies', R.reduce((a, c) => a + (+c.replies || 0), 0)], ['Link clicks', R.reduce((a, c) => a + (+c.clicks || 0), 0)], ['Bookings / leads', R.reduce((a, c) => a + (+c.bookings || 0), 0)], ['Orders', R.reduce((a, c) => a + (+c.orders || 0), 0)]];
+  const s = W.sum || {}, C = W.camps.filter(c => c.status !== 'Cancelled'), win = +WS().win || 3;
+  const r = waRes(), cost = C.reduce((a, c) => a + waCost(c), 0), sent = s.total || 0;
   const k = (l, v, sub) => `<div class="c"><small class="mu">${l}</small><b style="display:block;font-size:26px;font-weight:800;letter-spacing:-.02em">${v}</b>${sub ? `<small class="mu">${sub}</small>` : ''}</div>`;
-  const mo = []; for (let i = 5; i >= 0; i--) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); const m = iso(d).slice(0, 7); mo.push([m, ((s.monthly || []).find(x => x.m === m) || {}).n || 0, C.filter(c => (c.date || '').startsWith(m)).length]) }
-  const mx = Math.max(1, ...mo.map(x => x[1]));
-  const cat = WA_CATS.map(n => { const L = C.filter(c => c.category === n); if (!L.length) return ''; const del = L.reduce((a, c) => a + (+c.delivered || 0), 0), rd = L.reduce((a, c) => a + (+c.read || 0), 0), o = L.reduce((a, c) => a + (+c.orders || 0), 0), rv = L.reduce((a, c) => a + (+c.revenue || 0), 0), cs = L.reduce((a, c) => a + waCost(c), 0); return `<tr><td><b>${n}</b></td><td>${L.length}</td><td>${nfmt(L.reduce((a, c) => a + waSent(c), 0))}</td><td>${nfmt(del)}</td><td>${del ? waPct(rd, del) : '—'}</td><td>${nfmt(o)}</td><td>${del ? waPct(o, del) : '—'}</td><td>${rv ? inr(rv) : '—'}</td><td>${cs && rv ? (rv / cs).toFixed(1) + 'x' : '—'}</td></tr>` }).filter(Boolean);
+  const per = C.filter(c => waSent(c)).map(c => ({ c, sn: waSent(c), r: waRes(c.id) })).sort((a, b) => b.r.orders - a.r.orders || b.r.people / b.sn - a.r.people / a.sn);
+  const mx = Math.max(1, ...per.map(x => x.r.orders));
+  const byAud = {}; per.forEach(x => { const a = x.c.audience || '(No audience)'; const o = byAud[a] = byAud[a] || { sn: 0, orders: 0, people: 0, rev: 0 }; o.sn += x.sn; o.orders += x.r.orders; o.people += x.r.people; o.rev += x.r.revenue });
+  const aud = Object.entries(byAud).sort((a, b) => b[1].orders - a[1].orders).map(([a, o]) => `<tr><td><b>${esc(a)}</b></td><td>${nfmt(o.sn)}</td><td>${nfmt(o.people)}</td><td>${waPct(o.people, o.sn)}</td><td><b>${nfmt(o.orders)}</b></td><td>${o.rev ? inr(o.rev) : '—'}</td></tr>`);
   const lk = W.lk;
-  return `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">${k('Messages sent', nfmt(s.total), nfmt(s.unique) + ' unique numbers')}${k('Last 7 days', nfmt(s.last7))}${k('Last 30 days', nfmt(s.last30))}${k('Campaigns', C.filter(c => c.status !== 'Planned').length, C.filter(c => c.status === 'Planned').length + ' planned')}${k('Orders', nfmt(tot('orders')))}${k('Revenue', inr(rev))}${k('Spend', cost ? inr(cost) : '—', cost ? '' : 'set cost/msg in Settings')}${k('ROAS', cost && rev ? (rev / cost).toFixed(1) + 'x' : '—')}</div>
-  <div class="two" style="margin-top:14px"><div class="c"><div class="ct">Funnel · campaigns with results</div>${fs ? fun.map(([l, v], i) => `<div class="row" style="justify-content:space-between;margin:0"><span>${l}</span><span><b>${nfmt(v)}</b> <small class="mu">${i > 1 ? waPct(v, fd) + ' of delivered' : i === 1 ? waPct(v, fs) + ' delivered' : ''}</small></span></div><div class="bar"><i style="width:${fs ? Math.max(1, v / fs * 100) : 0}%"></i></div>`).join('') : '<p class="mu">Fill Delivered / Read / Orders on a sent campaign to see the funnel.</p>'}</div>
-  <div class="c"><div class="ct">Last 6 months · messages</div>${mo.map(([m, n, cc]) => `<div class="row" style="justify-content:space-between;margin:0"><span>${new Date(m + '-01T00:00:00').toLocaleString('en', { month: 'short', year: '2-digit' })}</span><span><b>${nfmt(n)}</b> <small class="mu">${cc} campaigns</small></span></div><div class="bar"><i style="width:${n / mx * 100}%"></i></div>`).join('')}</div></div>
-  <h3>By category</h3>${tbl(['Category', 'Campaigns', 'Sent', 'Delivered', 'Read %', 'Orders', 'Order %', 'Revenue', 'ROAS'], cat)}
+  return `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">${k('Messages sent', nfmt(sent), nfmt(s.unique) + ' unique numbers')}${k('Customers who ordered', nfmt(r.people), sent ? waPct(r.people, s.unique || sent) + ' of people messaged' : '')}${k('Orders from WhatsApp', nfmt(r.orders), r.open ? r.open + ' still open' : '')}${k('Revenue', r.revenue ? inr(r.revenue) : '—', 'completed orders')}${k('New customers', nfmt(r.newc), 'first-ever order')}${k('Est. WhatsApp cost', cost ? inr(cost) : '—', cost ? 'sent × cost/msg · not added to marketing spend' : 'set cost/msg in Settings')}${k('Return', cost && r.revenue ? (r.revenue / cost).toFixed(1) + 'x' : '—', 'revenue ÷ est. cost')}${k('Cost per order', cost && r.orders ? inr(cost / r.orders) : '—')}</div>
+  <div class="c" style="margin-top:14px"><div class="ct">Orders by campaign <span class="mu" style="font-weight:500">· matched within ${win} day${win > 1 ? 's' : ''} of sending</span></div>
+  ${per.length ? per.slice(0, 12).map(x => `<div class="row" style="justify-content:space-between;margin:0;cursor:pointer" onclick="waCampView('${x.c.id}')"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.c.name)} <small class="mu">· ${fmtD(x.c.date)}</small></span><span style="flex:none"><b>${x.r.orders}</b> <small class="mu">orders · ${waPct(x.r.people, x.sn)} of ${nfmt(x.sn)}</small></span></div><div class="bar"><i style="width:${x.r.orders ? Math.max(2, x.r.orders / mx * 100) : 0}%"></i></div>`).join('') : '<p class="mu">Send and mark a campaign as sent to see results here.</p>'}</div>
+  <h3>By audience</h3>${tbl(['Audience', 'Sent', 'Ordered', 'Conversion', 'Orders', 'Revenue'], aud)}
   <h3>Number lookup</h3><div class="c"><div class="row"><input id="wa_lk" placeholder="Any phone number" style="max-width:240px" onkeydown="if(event.key==='Enter')waLookup()"><button class="btn sm" onclick="waLookup()">Look up</button></div>
   ${lk ? (lk.err ? `<p class="mu">${lk.err}</p>` : `<p style="margin:10px 0 0"><b>${lk.phone}</b> — messaged <b>${lk.times}</b> time${lk.times === 1 ? '' : 's'}${lk.last_sent ? `, last on <b>${fmtD(lk.last_sent)}</b> (${esc(lk.last_campaign || '')})` : ''} · ${lk.opted ? '<span class="chip bad">Opted out — never message</span>' : '<span class="chip ok">Not opted out</span>'}</p>`) : ''}</div>`;
 }
@@ -342,13 +424,14 @@ function waVSet() {
   return `<div class="c f" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));align-items:start">
     ${I('gap', 'Minimum gap (days)', 'number', 'Same number can’t be messaged again within this many days.')}
     ${I('cap', 'Max messages per 30 days', 'number', 'Blocks a number that already got this many in 30 days.')}
-    ${I('cpm', 'Cost per message ₹', 'number', 'Your BSP rate — drives spend and ROAS.')}
+    ${I('cpm', 'Cost per message ₹', 'number', 'Your Interakt rate — used only for the WhatsApp return figure. Never added to marketing spend.')}
+    ${I('win', 'Order window (days)', 'number', 'An order counts for a campaign if the customer orders within this many days of the message.')}
     ${I('cc', 'Country code', 'number', 'Filled in the upload file.')}
     <button class="btn" style="align-self:center" onclick="waSetSave()">Save settings</button></div>
   <h3>Backup</h3><div class="c"><p class="mu" style="margin-top:0">Everything is stored in your Supabase database — separate from the app, so nothing is lost if the site goes down. Download a full Excel copy anytime (good habit: once a week).</p>
   <button class="btn" onclick="waBackup()">⬇ Download full backup (Excel)</button></div>`;
 }
-async function waSetSave() { const g = k => $('#ws_' + k).value.trim(); if (await put('settings', 'wa', { gap: +g('gap') || 0, cap: +g('cap') || 99, cpm: +g('cpm') || 0, cc: +g('cc') || 91 })) msg('Settings saved ✓') }
+async function waSetSave() { const g = k => $('#ws_' + k).value.trim(); if (await put('settings', 'wa', { gap: +g('gap') || 0, cap: +g('cap') || 99, cpm: +g('cpm') || 0, cc: +g('cc') || 91, win: Math.min(30, Math.max(0, +g('win') || 3)) })) { msg('Settings saved ✓'); W.attr = await waAttrLoad(); render() } }
 async function waBackup() {
   try {
     msg('Preparing backup…');
