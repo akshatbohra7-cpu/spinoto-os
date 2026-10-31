@@ -146,6 +146,8 @@ const put=async(c,id,d,note)=>{if(!db){msg('Database not connected');return}try{
 const upd=async(c,id,d,note)=>{try{await db.collection(c).doc(id).update(d);if(LOGC[c]&&note)log(note[0],note[1])}catch(e){msg('Could not update: '+(e.message||e.code))}};
 const del=async(c,id)=>{const k=c+id;if(armed!==k){armed=k;render();return}armed='';try{await db.collection(c).doc(id).delete()}catch(e){msg('Could not delete: '+(e.message||e.code))}};
 const xb=(c,id)=>`<button class="x" onclick="del('${c}','${esc(id)}')">${armed===c+id?'Sure?':'✕'}</button>`;
+// On phones the content area (#app) scrolls instead of the page — send scrollTo there.
+(function(){const ws=window.scrollTo.bind(window);window.scrollTo=function(...a){const m=document.getElementById('app');if(m&&m.scrollHeight>m.clientHeight+1&&getComputedStyle(m).overflowY==='auto'){try{m.scrollTo(...a)}catch(e){m.scrollTop=0}}else ws(...a)}})();
 const go=t=>{tab=t;armed='';EX.pop='';closeAll();if(t==='wa'&&window.waEnter)waEnter();renderNow();scrollTo(0,0)};
 const B2B=/hiring|onboard|aggregator|recruit|partner/i;
 function calc(){const cat={};S.adsets.forEach(a=>cat[a.name]=a.category);const by={};S.entries.forEach(e=>(by[e.adset]=by[e.adset]||[]).push(e));const r=[];

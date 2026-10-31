@@ -156,7 +156,7 @@ function exTrend(ds, C) {
   const hide = () => { if (tip) tip.style.display = 'none' };
   addEventListener('pointermove', e => { const el = e.target.closest && e.target.closest('[data-tip]'); el ? show(el, e.clientX, e.clientY) : hide() }, { passive: true });
   addEventListener('focusin', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el) { const r = el.getBoundingClientRect(); show(el, r.left + r.width / 2, r.top) } });
-  addEventListener('scroll', hide, { passive: true });
+  addEventListener('scroll', hide, { passive: true, capture: true });
 })();
 const topN = (rows, f, n) => { const c = {}; rows.forEach(r => { const k = f(r); if (k && k !== '—') c[k] = (c[k] || 0) + 1 }); return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, n) };
 

@@ -153,3 +153,15 @@ body.authing{min-height:100dvh;background:var(--bg)}
 .cc-v{font-size:12px}
 
 .cc-s.part{opacity:.4}.pswatch{display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--c1);opacity:.4;margin-right:6px;vertical-align:-1px}
+
+/* phones: app-shell — the page itself never scrolls, only the content area does.
+   iOS Safari can't resize its toolbar then, so the bottom menu stays put (no jumping / gaps). */
+@media(max-width:900px){
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+  body.authing{overflow:auto!important;height:auto!important}
+  .app{display:flex!important;flex-direction:column;height:100vh;height:100dvh;min-height:0!important}
+  #app{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:24px!important}
+  aside{position:relative!important;top:auto!important;bottom:auto!important;order:2;flex:none!important;overflow-x:auto;overflow-y:hidden;box-shadow:0 -1px 0 rgba(0,0,0,.25)}
+  aside::after{display:none!important;content:none!important}
+  .fab{bottom:calc(84px + env(safe-area-inset-bottom,0px))!important}
+}
